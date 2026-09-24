@@ -19,7 +19,7 @@ Preconditions:
 - `helpers/doctor.sh` 通过。
 - 可选：`RUN_ID` 环境变量区分证据目录。
 
-- **创建（helper）。** `RUN_ID=... node helpers/drive-create-gathering.mjs`。stdout JSON 含 `url` 与 `screenshot`；页面 heading level 1 等于饭局名。
+- **创建（helper）。** 仓库根目录：`export RUN_ID=... && node .cursor/skills/verify-split-bill/helpers/drive-create-gathering.mjs`。stdout JSON 含 `url` 与 `screenshot`；页面 heading level 1 等于饭局名。
 - **新 context 验证。** `browser.newContext()` → `goto(url)` → 同一 G1 文案；截图 `fresh-context.png`。
 - **双饭局。** 连续两次从 `/` 创建「A」「B」；`urlA !== urlB`；分别 goto 只见到对应标题。
 

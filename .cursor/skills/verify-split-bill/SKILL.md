@@ -38,7 +38,9 @@ Run doctor before every drive when anything looks stale.
 
 ## Drive
 
-Harness: **Playwright** (`playwright` in repo `devDependencies`). Run drive helpers from **repo root** so Node ESM resolves `import 'playwright'` via the repo’s `node_modules` (no global install). One-time browser binaries: `npx playwright install chromium` (same as CI). Viewport **375×667**. Prefer roles and labels from `lib/copy.ts`:
+Harness: **Playwright** (`playwright` in repo `devDependencies`). Node ESM resolves `import 'playwright'` by walking **parent directories from the script file path** — not from your shell cwd. A one-off script in `/tmp` therefore fails with `ERR_MODULE_NOT_FOUND` even when you run `node /tmp/foo.mjs` from the repo root.
+
+**Where to put drive scripts:** use committed helpers under `.cursor/skills/verify-split-bill/helpers/*.mjs` (they sit inside the repo tree so resolution reaches `node_modules/playwright`). For AC6 / AC7 do not invent `/tmp` scripts; run the helpers below. One-time browser binaries: `npx playwright install chromium` (same as CI). Viewport **375×667**. Prefer roles and labels from `lib/copy.ts`:
 
 | UI | Stable handle |
 |----|----------------|
@@ -51,14 +53,22 @@ Harness: **Playwright** (`playwright` in repo `devDependencies`). Run drive help
 | 记一笔 G13 | `getByRole('button', { name: '记一笔' })` |
 | 找不到页 | `getByRole('heading', { name: '找不到这个饭局' })` |
 
-Example — drive **create gathering** (maps to `features/create-gathering.md`):
+Run from **repo root** (sets `RUN_ID` once per shell session):
 
 ```bash
 export RUN_ID="${RUN_ID:-$(date +%s)}"
 node .cursor/skills/verify-split-bill/helpers/drive-create-gathering.mjs
+node .cursor/skills/verify-split-bill/helpers/drive-home-empty-error.mjs
+node .cursor/skills/verify-split-bill/helpers/drive-not-found.mjs
 ```
 
-Creates饭局「验收技能」from `/`, asserts URL matches `/g/<id>`, saves screenshot and JSON under `/opt/cursor/artifacts/verify-split-bill/$RUN_ID/`.
+| Helper | Feature doc | Evidence files |
+|--------|-------------|----------------|
+| `drive-create-gathering.mjs` | `features/create-gathering.md` | `create-gathering.png`, `.json` |
+| `drive-home-empty-error.mjs` | `features/home-validation.md` (AC6) | `home-empty-error.png`, `.json` |
+| `drive-not-found.mjs` | `features/not-found.md` (AC7) | `not-found.png`, `.json` |
+
+All land under `/opt/cursor/artifacts/verify-split-bill/$RUN_ID/`.
 
 For full issue #2 / #1 AC matrix, see feature map in `features/README.md`. One-off PR verification script pattern lives in helpers as reference only; extend feature files instead of duplicating AC lists in SKILL.md.
 
@@ -68,7 +78,7 @@ For full issue #2 / #1 AC matrix, see feature map in `features/README.md`. One-o
 - Each proof: **screenshot** (`.png`, full page) plus **structured JSON** (`.json`) with URL, visible copy, and measured px where relevant.
 - Standards: use real UI paths (form submit → navigation), not direct API calls alone. Capture state after the user action (error alert, new URL, heading text). For link persistence, open a **new browser context** with the same URL.
 - Side effects: creating a gathering inserts a SQLite row; record the gathering URL in JSON if later cleanup must target it.
-- Compare layout to wireframes under `docs/wireframes/` (`w1-home.png`, `w2b-gathering-empty.png`, `w5-not-found.png`) visually; filenames should reference the AC or page.
+- Optional visual compare: wireframes at repo-root `docs/wireframes/` (`w1-home.png`, `w2b-gathering-empty.png`, `w5-not-found.png`). Check presence with `test -f docs/wireframes/w1-home.png` from repo root.
 
 Proof artifacts must survive Cleanup.
 
@@ -97,6 +107,8 @@ All paths relative to repo root; `chmod +x` already set in git.
 | `helpers/launch.sh` | tmux + `npm run dev`, wait for :3000 |
 | `helpers/doctor.sh` | readiness + Node version |
 | `helpers/drive-create-gathering.mjs` | Playwright: home → create → gathering screenshot |
+| `helpers/drive-home-empty-error.mjs` | Playwright: home empty-name validation (AC6) |
+| `helpers/drive-not-found.mjs` | Playwright: invalid `/g/<id>` not-found (AC7) |
 | `helpers/cleanup.sh` | stop dev session started by launch |
 
 Maintenance: keep `features/` aligned with routes under `app/`; use `/maintain-verification-skill` when the app adds flows (加人, 记一笔, etc.).
