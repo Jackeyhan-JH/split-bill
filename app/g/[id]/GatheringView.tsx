@@ -1,9 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatHkd } from "@/lib/amount";
 import { copy } from "@/lib/copy";
 import type { ExpenseView } from "@/lib/expenses";
+import {
+  computeSettlement,
+  formatSignedNet,
+  formatTransferLine,
+} from "@/lib/settlement";
 
 export type Participant = { id: number; name: string };
 
@@ -44,6 +49,18 @@ export function GatheringView({
 
   const hasExpenses = expenses.length > 0;
   const activeParticipant = participants.find((person) => person.id === activeId) ?? null;
+  const settlement = useMemo(
+    () =>
+      computeSettlement(
+        participants,
+        expenses.map((entry) => ({
+          amountCents: entry.amountCents,
+          payerParticipantId: entry.payerParticipantId,
+          shares: entry.shares,
+        })),
+      ),
+    [participants, expenses],
+  );
 
   const showToast = useCallback((message: string) => {
     setToast(message);
@@ -386,9 +403,57 @@ export function GatheringView({
   );
 
   const settlementSection = (
-    <section aria-label={copy.settlement}>
+    <section aria-label={copy.settlement} className="settlement">
       <h2>{copy.settlement}</h2>
-      {!hasExpenses ? <p className="empty">{copy.noBills}</p> : null}
+      {hasExpenses ? (
+        <>
+          <table className="settlement-table">
+            <thead>
+              <tr>
+                <th scope="col">人</th>
+                <th scope="col" className="money-col">
+                  已付
+                </th>
+                <th scope="col" className="money-col">
+                  应付
+                </th>
+                <th scope="col" className="money-col">
+                  净额
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {settlement.summaries.map((row) => (
+                <tr key={row.participantId}>
+                  <th scope="row">{row.name}</th>
+                  <td className="money">{formatHkd(row.paidCents)}</td>
+                  <td className="money">{formatHkd(row.owedCents)}</td>
+                  <td className={`money net ${row.netCents > 0 ? "positive" : row.netCents < 0 ? "negative" : ""}`}>
+                    {formatSignedNet(row.netCents)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="settlement-outcome" data-testid="settlement-outcome">
+            {settlement.allSettled ? (
+              <p className="settled">{copy.allSettled}</p>
+            ) : (
+              <ul className="transfer-list">
+                {settlement.transfers.map((transfer, index) => (
+                  <li key={`${transfer.fromParticipantId}-${transfer.toParticipantId}-${index}`}>
+                    {formatTransferLine(transfer.fromName, transfer.amountCents, transfer.toName)}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </>
+      ) : (
+        <p className="empty" data-testid="settlement-outcome">
+          {copy.noBills}
+        </p>
+      )}
     </section>
   );
 
