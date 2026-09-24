@@ -317,6 +317,113 @@ input:focus-visible {
   margin-top: 0;
 }
 
+.money {
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, "SFMono-Regular", "Menlo", "Consolas", monospace;
+  text-align: right;
+}
+
+.field-label {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.amount-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.amount-field input {
+  margin-bottom: 0;
+  flex: 1;
+}
+
+.amount-prefix {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.choice-list {
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+}
+
+.choice-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.choice-row input {
+  width: auto;
+  min-height: auto;
+  margin: 0;
+}
+
+.expense-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.expense-row {
+  display: block;
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper);
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.expense-row-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.expense-desc {
+  font-weight: 600;
+}
+
+.expense-meta {
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: 16px;
+}
+
+.expense-shares {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.expense-shares li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 16px;
+}
+
+.dock .primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .toast {
   position: fixed;
   bottom: calc(88px + env(safe-area-inset-bottom));
