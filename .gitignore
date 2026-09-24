@@ -1,0 +1,10 @@
+node_modules
+.next
+data
+*.tsbuildinfo
+playwright-report
+test-results
+blob-report
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
