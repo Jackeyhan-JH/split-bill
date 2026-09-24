@@ -12,6 +12,8 @@
 
 饭局写在表 `gatherings`（`id`、`name`、`created_at`）。参与人、账目、分摊以后加在同一个 SQLite 文件的新表里，用 `gathering_id` 指向饭局。饭局页地址是 `/g/<id>`。`id` 是 16 字节随机数，编码为 base64url。
 
+线框在 `docs/wireframes/`。
+
 ## 本地运行
 
 需要 Node.js 22。
