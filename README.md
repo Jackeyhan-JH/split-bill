@@ -34,6 +34,8 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-`npm test` 覆盖创建、读取、找不到饭局，以及链接唯一且不可猜。`npm run test:e2e` 用 Playwright，视口 375×667，覆盖建饭局的 AC1 到 AC6。
+`npm test` 覆盖创建、读取、找不到饭局、链接唯一且不可猜，以及参与人的增删改。`npm run test:e2e` 用 Playwright，视口 375×667，覆盖建饭局与参与人相关 AC。
+
+AC8（已入账不可删）在单元测试里用 `lib/expenses.seedExpense` 写入最小账目行；端到端在 `E2E_TEST_HELPERS=1` 时调用 `POST /api/gatherings/<id>/test/expenses`（Playwright 的 webServer 已设置该变量）。该路由仅用于测试，生产 dev 默认不可用。
 
 GitHub Actions 在 pull request 和推送到 `main` 时安装依赖、跑 lint、类型检查、单元测试，并安装 Playwright 浏览器后跑端到端测试。

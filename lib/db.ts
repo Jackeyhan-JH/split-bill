@@ -21,8 +21,50 @@ export function getDb(): Database.Database {
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       created_at TEXT NOT NULL
-    )
+    );
+
+    CREATE TABLE IF NOT EXISTS participants (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      gathering_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (gathering_id) REFERENCES gatherings(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_participants_gathering
+      ON participants (gathering_id, id);
+
+    CREATE TABLE IF NOT EXISTS expenses (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      gathering_id TEXT NOT NULL,
+      description TEXT NOT NULL,
+      amount_cents INTEGER NOT NULL,
+      payer_participant_id INTEGER NOT NULL,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (gathering_id) REFERENCES gatherings(id) ON DELETE CASCADE,
+      FOREIGN KEY (payer_participant_id) REFERENCES participants(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS expense_splits (
+      expense_id INTEGER NOT NULL,
+      participant_id INTEGER NOT NULL,
+      PRIMARY KEY (expense_id, participant_id),
+      FOREIGN KEY (expense_id) REFERENCES expenses(id) ON DELETE CASCADE,
+      FOREIGN KEY (participant_id) REFERENCES participants(id)
+    );
   `);
+  migrateExpensesColumns(database);
   openedPath = file;
   return database;
+}
+
+function migrateExpensesColumns(db: Database.Database) {
+  const columns = db.prepare("PRAGMA table_info(expenses)").all() as { name: string }[];
+  const names = new Set(columns.map((column) => column.name));
+  if (!names.has("description")) {
+    db.exec("ALTER TABLE expenses ADD COLUMN description TEXT NOT NULL DEFAULT ''");
+  }
+  if (!names.has("amount_cents")) {
+    db.exec("ALTER TABLE expenses ADD COLUMN amount_cents INTEGER NOT NULL DEFAULT 100");
+  }
 }
