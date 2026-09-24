@@ -120,7 +120,9 @@ test("issue 4 edit delete and layout order", async ({ page }) => {
   await page.getByLabel("金额").fill("300");
   await page.getByRole("dialog").locator('input[type="radio"]').first().check();
   await page.getByRole("dialog").getByRole("button", { name: "保存", exact: true }).click();
-
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.locator(".expense-row").filter({ hasText: "烧烤" })).toBeVisible();
+  await expect(page.locator("main section").first()).toHaveAttribute("aria-label", "结算");
   const sectionOrder = await page.locator("main section").evaluateAll((sections) =>
     sections.map((section) => section.getAttribute("aria-label") ?? section.querySelector("h2")?.textContent ?? ""),
   );

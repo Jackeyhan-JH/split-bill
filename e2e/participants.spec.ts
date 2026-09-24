@@ -124,6 +124,20 @@ test("issue 3 AC9 another context sees participants after refresh", async ({ pag
   await context.close();
 });
 
+test("toast clears when opening add-person so 确定 is not covered", async ({ page }) => {
+  await createGathering(page, "周五火锅");
+  await addPerson(page, "小明");
+  await expect(page.getByRole("status")).toHaveText("已保存");
+
+  await page.getByRole("button", { name: "+ 加人", exact: true }).click();
+  await expect(page.getByRole("status")).toHaveCount(0);
+  const confirm = page.getByRole("dialog").getByRole("button", { name: "确定", exact: true });
+  await expect(confirm).toBeVisible();
+  const box = await confirm.boundingBox();
+  expect(box?.height).toBeGreaterThanOrEqual(44);
+  await page.getByRole("dialog").getByRole("button", { name: "取消", exact: true }).click();
+});
+
 test("issue 1 AC6–AC8 person panel targets and text size", async ({ page }) => {
   await createGathering(page, "周五火锅");
   const addPersonButton = page.getByRole("button", { name: "+ 加人", exact: true });

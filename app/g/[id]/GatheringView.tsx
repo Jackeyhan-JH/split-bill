@@ -51,6 +51,12 @@ export function GatheringView({
     toastTimer.current = setTimeout(() => setToast(""), 2400);
   }, []);
 
+  const dismissToast = useCallback(() => {
+    setToast("");
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = null;
+  }, []);
+
   useEffect(() => {
     return () => {
       if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -58,6 +64,7 @@ export function GatheringView({
   }, []);
 
   function openAdd() {
+    dismissToast();
     setPersonSheet("add");
     setExpenseSheet(null);
     setActiveId(null);
@@ -68,6 +75,7 @@ export function GatheringView({
   }
 
   function openManage(participant: Participant) {
+    dismissToast();
     setPersonSheet("manage");
     setExpenseSheet(null);
     setActiveId(participant.id);
@@ -101,6 +109,7 @@ export function GatheringView({
       showToast(copy.needPeopleFirst);
       return;
     }
+    dismissToast();
     setPersonSheet(null);
     setExpenseSheet("create");
     resetExpenseForm();
@@ -108,6 +117,7 @@ export function GatheringView({
   }
 
   function openExpenseEdit(expense: ExpenseView) {
+    dismissToast();
     setPersonSheet(null);
     setExpenseSheet("edit");
     setEditingExpenseId(expense.id);
