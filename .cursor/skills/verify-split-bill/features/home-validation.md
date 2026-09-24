@@ -20,7 +20,7 @@ Preconditions:
 
 - **打开首页。** `page.goto('http://127.0.0.1:3000/')`。可见 heading「聚餐分账」、text「不注册，靠链接分享」、label「饭局名称」、placeholder「例如：周五火锅」、button「创建饭局」。
 - **触发校验。** `page.getByRole('button', { name: '创建饭局' }).click()`。`main` 内 `role=alert` 文本为「请填写饭局名称」；`page.url()` 以 `/` 结尾且无 `/g/`。
-- **Proof。** `page.screenshot({ path: '.../home-empty-error.png', fullPage: true })`。
+- **Proof。** `page.screenshot({ path: '/opt/cursor/artifacts/verify-split-bill/$RUN_ID/home-empty-error.png', fullPage: true })`（`$RUN_ID` 与 drive 脚本一致）。
 
 ## Gotchas
 

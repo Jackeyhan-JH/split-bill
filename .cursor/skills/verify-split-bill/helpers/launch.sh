@@ -12,7 +12,11 @@ home_ok() {
 
 started=0
 if home_ok; then
-  echo "reuse" >"$MARKER"
+  # Keep tmux session marker if launch.sh already started this server (AC8).
+  # Only record "reuse" when port 3000 was up without our session marker (AC9).
+  if [[ ! -f "$MARKER" ]] || [[ "$(cat "$MARKER")" != "$SESSION" ]]; then
+    echo "reuse" >"$MARKER"
+  fi
   echo "split-bill dev already up at http://127.0.0.1:3000 (reuse existing server)"
   exit 0
 fi

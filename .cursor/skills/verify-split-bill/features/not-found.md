@@ -19,7 +19,7 @@ Preconditions:
 
 - **打开无效链接。** `page.goto('http://127.0.0.1:3000/g/not-a-real-gathering')`。
 - **断言。** heading「找不到这个饭局」；text「链接可能打错了，或饭局不存在」；link「回首页」；`getByText('账目')` count 0。
-- **Proof。** 全页截图 `not-found.png`。
+- **Proof。** `page.screenshot({ path: '/opt/cursor/artifacts/verify-split-bill/$RUN_ID/not-found.png', fullPage: true })`。
 
 ## Gotchas
 

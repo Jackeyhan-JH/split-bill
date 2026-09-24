@@ -17,7 +17,7 @@ From repo root (Node ≥ 22):
 
 - Starts `npm run dev` in tmux session `verify-split-bill-dev` (cwd = repo root).
 - Ready when `curl -sf http://127.0.0.1:3000/` succeeds (script polls up to 120s).
-- Writes PID/session marker to `/tmp/verify-split-bill-dev.pid` (contains tmux session name).
+- Writes marker to `/tmp/verify-split-bill-dev.pid`: tmux session name `verify-split-bill-dev` when this script starts the server, or `reuse` when port 3000 was already up (external dev). Re-launching while the marker still holds the session name does **not** overwrite it.
 
 Teardown is **not** part of launch; use Cleanup below.
 
@@ -38,7 +38,7 @@ Run doctor before every drive when anything looks stale.
 
 ## Drive
 
-Harness: **Playwright** (`@playwright/test` / `playwright` from devDependencies). Viewport **375×667**. Prefer roles and labels from `lib/copy.ts`:
+Harness: **Playwright** (`playwright` in repo `devDependencies`). Run drive helpers from **repo root** so Node ESM resolves `import 'playwright'` via the repo’s `node_modules` (no global install). One-time browser binaries: `npx playwright install chromium` (same as CI). Viewport **375×667**. Prefer roles and labels from `lib/copy.ts`:
 
 | UI | Stable handle |
 |----|----------------|
@@ -54,8 +54,8 @@ Harness: **Playwright** (`@playwright/test` / `playwright` from devDependencies)
 Example — drive **create gathering** (maps to `features/create-gathering.md`):
 
 ```bash
-RUN_ID=${RUN_ID:-$(date +%s)} \
-  node .cursor/skills/verify-split-bill/helpers/drive-create-gathering.mjs
+export RUN_ID="${RUN_ID:-$(date +%s)}"
+node .cursor/skills/verify-split-bill/helpers/drive-create-gathering.mjs
 ```
 
 Creates饭局「验收技能」from `/`, asserts URL matches `/g/<id>`, saves screenshot and JSON under `/opt/cursor/artifacts/verify-split-bill/$RUN_ID/`.
@@ -78,7 +78,7 @@ Proof artifacts must survive Cleanup.
 .cursor/skills/verify-split-bill/helpers/cleanup.sh
 ```
 
-- Sends `C-c` to tmux session `verify-split-bill-dev` only if `/tmp/verify-split-bill-dev.pid` exists and records that session (never `pkill node`).
+- Sends `C-c` to tmux session `verify-split-bill-dev` only if the marker records that session name (not `reuse`; never `pkill node`).
 - Removes `/tmp/verify-split-bill-dev.pid`.
 - Does **not** delete `/opt/cursor/artifacts/**`.
 
@@ -98,11 +98,5 @@ All paths relative to repo root; `chmod +x` already set in git.
 | `helpers/doctor.sh` | readiness + Node version |
 | `helpers/drive-create-gathering.mjs` | Playwright: home → create → gathering screenshot |
 | `helpers/cleanup.sh` | stop dev session started by launch |
-
-Invoke drive helper with repo devDependencies:
-
-```bash
-cd /path/to/split-bill && NODE_PATH=$PWD/node_modules node .cursor/skills/verify-split-bill/helpers/drive-create-gathering.mjs
-```
 
 Maintenance: keep `features/` aligned with routes under `app/`; use `/maintain-verification-skill` when the app adds flows (加人, 记一笔, etc.).
