@@ -132,7 +132,6 @@ input::placeholder {
 }
 
 .chip {
-  margin: 4px 0 12px;
   padding: 0 18px;
   border: 1px dashed var(--ink);
   border-radius: 999px;
@@ -140,9 +139,38 @@ input::placeholder {
   color: var(--ink);
 }
 
+.people-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.person-tag,
+.chip.add-person {
+  margin: 0;
+}
+
+.person-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 18px;
+  border: 1px solid var(--ink);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: 16px;
+  cursor: pointer;
+}
+
 .primary:focus-visible,
 .ghost:focus-visible,
 .chip:focus-visible,
+.person-tag:focus-visible,
 input:focus-visible {
   outline: 2px solid var(--ink);
   outline-offset: 2px;
@@ -217,4 +245,89 @@ input:focus-visible {
   width: auto;
   min-width: 168px;
   padding: 0 32px;
+}
+
+.sheet-root {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgb(0 0 0 / 40%);
+}
+
+.sheet {
+  width: min(375px, 100%);
+  max-height: 90dvh;
+  padding: 20px 16px calc(20px + env(safe-area-inset-bottom));
+  overflow: auto;
+  border-radius: 16px 16px 0 0;
+  background: var(--paper);
+}
+
+.sheet h2 {
+  margin-bottom: 16px;
+}
+
+.sheet .primary {
+  margin-top: 8px;
+}
+
+.sheet .primary.inline {
+  width: auto;
+  flex: 1;
+}
+
+.sheet .ghost {
+  width: 100%;
+  margin-top: 10px;
+}
+
+.sheet .ghost.danger {
+  border-color: #b00020;
+  color: #b00020;
+}
+
+.sheet .ghost.sheet-cancel {
+  margin-top: 8px;
+}
+
+.sheet .alert {
+  margin: 0 0 12px;
+}
+
+.confirm-box {
+  margin-top: 12px;
+}
+
+.confirm-box p {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.confirm-actions .ghost {
+  width: auto;
+  flex: 1;
+  margin-top: 0;
+}
+
+.toast {
+  position: fixed;
+  bottom: calc(88px + env(safe-area-inset-bottom));
+  left: 50%;
+  z-index: 30;
+  margin: 0;
+  padding: 10px 16px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: rgb(17 17 17 / 92%);
+  color: #ffffff;
+  font-size: 16px;
+  pointer-events: none;
 }
