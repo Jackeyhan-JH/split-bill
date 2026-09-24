@@ -476,7 +476,8 @@ input:focus-visible {
   font-size: 16px;
 }
 
-.dock .primary:disabled {
+.dock .primary.is-disabled,
+.dock .primary[aria-disabled="true"] {
   opacity: 0.45;
   cursor: not-allowed;
 }

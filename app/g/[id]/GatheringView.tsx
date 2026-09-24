@@ -487,9 +487,9 @@ export function GatheringView({
       </main>
       <div className="dock">
         <button
-          className="primary"
+          className={`primary${participants.length === 0 ? " is-disabled" : ""}`}
           type="button"
-          disabled={participants.length === 0}
+          aria-disabled={participants.length === 0}
           onClick={openExpenseCreate}
         >
           {copy.addExpense}
