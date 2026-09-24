@@ -31,6 +31,7 @@ export const copy = {
   noExpenses: "还没有账目，点下方「记一笔」",
   settlement: "结算",
   noBills: "还没有账目",
+  allSettled: "已经两清，不需要转账",
   addExpense: "记一笔",
   editExpense: "编辑账目",
   expenseDescriptionLabel: "说明",

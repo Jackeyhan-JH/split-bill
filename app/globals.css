@@ -323,6 +323,63 @@ input:focus-visible {
   text-align: right;
 }
 
+.settlement-table {
+  width: 100%;
+  margin-bottom: 12px;
+  border-collapse: collapse;
+  font-size: 16px;
+}
+
+.settlement-table th,
+.settlement-table td {
+  padding: 6px 0;
+  vertical-align: top;
+}
+
+.settlement-table thead th {
+  font-weight: 600;
+  text-align: left;
+}
+
+.settlement-table thead th.money-col {
+  text-align: right;
+}
+
+.settlement-table tbody th {
+  font-weight: 400;
+  text-align: left;
+}
+
+.settlement-table .net.positive {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.settlement-table .net.negative {
+  color: var(--muted);
+}
+
+.transfer-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.transfer-list li {
+  margin: 0 0 6px;
+  font-size: 16px;
+}
+
+.transfer-list li:last-child {
+  margin-bottom: 0;
+}
+
+.settlement-outcome .settled {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
 .field-label {
   margin: 0 0 8px;
   font-size: 16px;
@@ -419,7 +476,8 @@ input:focus-visible {
   font-size: 16px;
 }
 
-.dock .primary:disabled {
+.dock .primary.is-disabled,
+.dock .primary[aria-disabled="true"] {
   opacity: 0.45;
   cursor: not-allowed;
 }

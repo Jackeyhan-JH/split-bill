@@ -154,9 +154,13 @@ test("issue 4 edit delete and layout order", async ({ page }) => {
   await expect(page.locator(".expense-row").filter({ hasText: "饮料" })).toHaveCount(0);
 });
 
-test("G13 disabled without participants", async ({ page }) => {
+test("G13 disabled without participants shows need-people toast", async ({ page }) => {
   await createGathering(page, "周五火锅");
-  await expect(page.getByRole("button", { name: "记一笔", exact: true })).toBeDisabled();
+  const button = page.getByRole("button", { name: "记一笔", exact: true });
+  await expect(button).toBeDisabled();
+  await button.click({ force: true });
+  await expect(page.getByRole("status")).toHaveText("请先加人");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
 });
 
 test("issue 4 AC9 another browser sees expenses", async ({ page, browser }) => {
