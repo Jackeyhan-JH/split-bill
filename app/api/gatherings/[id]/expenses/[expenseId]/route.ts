@@ -13,7 +13,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   } catch {
     body = null;
   }
-  const result = updateExpense(id, expenseId, body);
+  const result = await updateExpense(id, expenseId, body);
   if (!result.ok) {
     const status = result.error === copy.notFoundTitle ? 404 : 400;
     return Response.json({ error: result.error }, { status });
@@ -27,7 +27,7 @@ export async function DELETE(_request: Request, context: { params: Promise<{ id:
   if (!Number.isInteger(expenseId) || expenseId <= 0) {
     return Response.json({ error: copy.notFoundTitle }, { status: 404 });
   }
-  const result = deleteExpense(id, expenseId);
+  const result = await deleteExpense(id, expenseId);
   if (!result.ok) {
     return Response.json({ error: result.error }, { status: 404 });
   }

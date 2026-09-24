@@ -4,10 +4,10 @@ import { getGathering } from "@/lib/gatherings";
 
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  if (!getGathering(id)) {
+  if (!(await getGathering(id))) {
     return Response.json({ error: copy.notFoundTitle }, { status: 404 });
   }
-  return Response.json({ expenses: listExpenses(id) });
+  return Response.json({ expenses: await listExpenses(id) });
 }
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
@@ -18,7 +18,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   } catch {
     body = null;
   }
-  const result = createExpense(id, body);
+  const result = await createExpense(id, body);
   if (!result.ok) {
     const status = result.error === copy.notFoundTitle ? 404 : 400;
     return Response.json({ error: result.error }, { status });

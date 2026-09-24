@@ -131,7 +131,7 @@ describe("participants API", () => {
     const gathering = await create("饭局");
     const xiaoMing = await addPerson(gathering.id, "小明");
     await addPerson(gathering.id, "小红");
-    seedExpense(gathering.id, {
+    await seedExpense(gathering.id, {
       payerParticipantId: xiaoMing.id,
       splitterParticipantIds: [xiaoMing.id],
     });
