@@ -26,27 +26,29 @@ npm install && npm run dev
 
 ## 上线部署
 
-公开网址：待部署后填写
+公开网址：https://split-bill-pi-eight.vercel.app
 
-### 一次性上线
+### 当前线上配置
 
-1. **Turso 数据库**（账号持有人操作）
+- **Vercel**：团队 `jackey-hung` 下的项目 `split-bill`（Hobby 计划），默认 Next.js 构建，无自定义 Server。
+- **Turso**：数据库 `split-bill`（Starter 免费档，区域 Tokyo），通过 [Vercel Marketplace 的 Turso 集成](https://vercel.com/integrations/turso) 创建并绑定。集成会为 **所有环境** 自动写入 `TURSO_DATABASE_URL` 与 `TURSO_AUTH_TOKEN`，无需在 Vercel 里手填这两项。
+
+### 一次性上线（备选：不用 Marketplace 时）
+
+1. **Turso 数据库**
    - 安装 [Turso CLI](https://docs.turso.tech/cli) 并登录。
    - 创建数据库：`turso db create split-bill`（名称可自定）。
    - 记下连接 URL：`turso db show split-bill --url`。
    - 创建访问令牌：`turso db tokens create split-bill`。
 2. **Vercel 项目**
    - 在 [Vercel](https://vercel.com) 用 GitHub 导入本仓库。
-   - 使用默认 Next.js 构建设置，无需自定义 Server。
-   - 在 **Production** 环境变量中设置：
-     - `TURSO_DATABASE_URL`：上一步的数据库 URL
-     - `TURSO_AUTH_TOKEN`：上一步的令牌
-   - 首次部署完成后，把 Vercel 提供的 `https://…` 地址填到上文「公开网址」一行并提交到 main。
+   - 在各环境变量中设置 `TURSO_DATABASE_URL` 与 `TURSO_AUTH_TOKEN`（若已用 Marketplace 集成可跳过）。
 
 ### 更新线上版本
 
-- 代码合并进 `main` 后，Vercel 会自动触发新的 Production 部署。
-- 也可在 Vercel 项目 **Deployments** 里选中某次部署，点 **Redeploy** 手动重新部署（例如只改了环境变量、未改代码时）。
+- 代码 **合并进 `main`** 后，Vercel 会自动部署到 **Production**（公开网址见上文）。
+- **Pull Request** 分支会生成 **Preview** 部署，用于合并前验收。
+- 需要手动重跑时：Vercel 控制台 → 项目 **Deployments** → 选中某次部署 → **Redeploy**（例如只改了环境变量、未改代码时）。
 
 饭局与账目保存在 Turso，重新部署不会清空数据。
 
