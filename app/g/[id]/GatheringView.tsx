@@ -1,36 +1,48 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { formatHkd } from "@/lib/amount";
 import { copy } from "@/lib/copy";
+import type { ExpenseView } from "@/lib/expenses";
 
 export type Participant = { id: number; name: string };
 
-type SheetMode = "add" | "manage" | null;
+type PersonSheet = "add" | "manage" | null;
+type ExpenseSheet = "create" | "edit" | null;
 
 type Props = {
   gatheringId: string;
   gatheringName: string;
   initialParticipants: Participant[];
-  hasExpenses: boolean;
+  initialExpenses: ExpenseView[];
 };
 
 export function GatheringView({
   gatheringId,
   gatheringName,
   initialParticipants,
-  hasExpenses,
+  initialExpenses,
 }: Props) {
   const [participants, setParticipants] = useState(initialParticipants);
-  const [sheet, setSheet] = useState<SheetMode>(null);
+  const [expenses, setExpenses] = useState(initialExpenses);
+  const [personSheet, setPersonSheet] = useState<PersonSheet>(null);
+  const [expenseSheet, setExpenseSheet] = useState<ExpenseSheet>(null);
   const [activeId, setActiveId] = useState<number | null>(null);
+  const [editingExpenseId, setEditingExpenseId] = useState<number | null>(null);
   const [nameInput, setNameInput] = useState("");
+  const [descriptionInput, setDescriptionInput] = useState("");
+  const [amountInput, setAmountInput] = useState("");
+  const [payerId, setPayerId] = useState<number | null>(null);
+  const [shareeIds, setShareeIds] = useState<number[]>([]);
   const [fieldError, setFieldError] = useState("");
   const [toast, setToast] = useState("");
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmDeletePerson, setConfirmDeletePerson] = useState(false);
+  const [confirmDeleteExpense, setConfirmDeleteExpense] = useState(false);
   const [blockedDelete, setBlockedDelete] = useState("");
   const submitting = useRef(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const hasExpenses = expenses.length > 0;
   const activeParticipant = participants.find((person) => person.id === activeId) ?? null;
 
   const showToast = useCallback((message: string) => {
@@ -46,30 +58,78 @@ export function GatheringView({
   }, []);
 
   function openAdd() {
-    setSheet("add");
+    setPersonSheet("add");
+    setExpenseSheet(null);
     setActiveId(null);
     setNameInput("");
     setFieldError("");
-    setConfirmDelete(false);
+    setConfirmDeletePerson(false);
     setBlockedDelete("");
   }
 
   function openManage(participant: Participant) {
-    setSheet("manage");
+    setPersonSheet("manage");
+    setExpenseSheet(null);
     setActiveId(participant.id);
     setNameInput(participant.name);
     setFieldError("");
-    setConfirmDelete(false);
+    setConfirmDeletePerson(false);
     setBlockedDelete("");
   }
 
-  function closeSheet() {
-    setSheet(null);
+  function closePersonSheet() {
+    setPersonSheet(null);
     setActiveId(null);
     setNameInput("");
     setFieldError("");
-    setConfirmDelete(false);
+    setConfirmDeletePerson(false);
     setBlockedDelete("");
+  }
+
+  function resetExpenseForm() {
+    setDescriptionInput("");
+    setAmountInput("");
+    setPayerId(null);
+    setShareeIds([]);
+    setFieldError("");
+    setConfirmDeleteExpense(false);
+    setEditingExpenseId(null);
+  }
+
+  function openExpenseCreate() {
+    if (participants.length === 0) {
+      showToast(copy.needPeopleFirst);
+      return;
+    }
+    setPersonSheet(null);
+    setExpenseSheet("create");
+    resetExpenseForm();
+    setShareeIds(participants.map((person) => person.id));
+  }
+
+  function openExpenseEdit(expense: ExpenseView) {
+    setPersonSheet(null);
+    setExpenseSheet("edit");
+    setEditingExpenseId(expense.id);
+    setDescriptionInput(expense.description);
+    setAmountInput((expense.amountCents / 100).toFixed(2));
+    setPayerId(expense.payerParticipantId);
+    setShareeIds([...expense.shareeParticipantIds]);
+    setFieldError("");
+    setConfirmDeleteExpense(false);
+  }
+
+  function closeExpenseSheet() {
+    setExpenseSheet(null);
+    resetExpenseForm();
+  }
+
+  function toggleSharee(participantId: number) {
+    setShareeIds((current) =>
+      current.includes(participantId)
+        ? current.filter((id) => id !== participantId)
+        : [...current, participantId],
+    );
   }
 
   async function submitAdd() {
@@ -98,7 +158,7 @@ export function GatheringView({
       const person = parseParticipant(data);
       if (!person) return;
       setParticipants((current) => [...current, person]);
-      closeSheet();
+      closePersonSheet();
       showToast(copy.saved);
     } finally {
       submitting.current = false;
@@ -133,20 +193,29 @@ export function GatheringView({
       setParticipants((current) =>
         current.map((entry) => (entry.id === person.id ? person : entry)),
       );
-      closeSheet();
+      setExpenses((current) =>
+        current.map((expense) => ({
+          ...expense,
+          payerName: expense.payerParticipantId === person.id ? person.name : expense.payerName,
+          shares: expense.shares.map((share) =>
+            share.participantId === person.id ? { ...share, name: person.name } : share,
+          ),
+        })),
+      );
+      closePersonSheet();
       showToast(copy.saved);
     } finally {
       submitting.current = false;
     }
   }
 
-  function requestDelete() {
+  function requestDeletePerson() {
     if (!activeParticipant) return;
-    setConfirmDelete(true);
+    setConfirmDeletePerson(true);
     setBlockedDelete("");
   }
 
-  async function confirmDeletePerson() {
+  async function confirmDeletePersonAction() {
     if (submitting.current || activeId === null) return;
     submitting.current = true;
     setBlockedDelete("");
@@ -161,14 +230,86 @@ export function GatheringView({
             ? data.error
             : "";
         if (message === copy.personOnExpense) {
-          setConfirmDelete(false);
+          setConfirmDeletePerson(false);
           setBlockedDelete(message);
           return;
         }
         return;
       }
       setParticipants((current) => current.filter((entry) => entry.id !== activeId));
-      closeSheet();
+      closePersonSheet();
+      showToast(copy.saved);
+    } finally {
+      submitting.current = false;
+    }
+  }
+
+  async function submitExpense() {
+    if (submitting.current || !expenseSheet) return;
+    if (!descriptionInput.trim()) {
+      setFieldError(copy.descriptionRequired);
+      return;
+    }
+    if (!payerId) {
+      setFieldError(copy.payerRequired);
+      return;
+    }
+    if (shareeIds.length === 0) {
+      setFieldError(copy.shareesRequired);
+      return;
+    }
+    submitting.current = true;
+    setFieldError("");
+    try {
+      const payload = {
+        description: descriptionInput,
+        amount: amountInput,
+        payerParticipantId: payerId,
+        shareeParticipantIds: shareeIds,
+      };
+      const url =
+        expenseSheet === "edit" && editingExpenseId !== null
+          ? `/api/gatherings/${gatheringId}/expenses/${editingExpenseId}`
+          : `/api/gatherings/${gatheringId}/expenses`;
+      const response = await fetch(url, {
+        method: expenseSheet === "edit" ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data: unknown = await response.json();
+      if (!response.ok) {
+        const message =
+          data && typeof data === "object" && "error" in data && typeof data.error === "string"
+            ? data.error
+            : copy.descriptionRequired;
+        setFieldError(message);
+        return;
+      }
+      const expense = parseExpense(data);
+      if (!expense) return;
+      if (expenseSheet === "edit") {
+        setExpenses((current) => current.map((entry) => (entry.id === expense.id ? expense : entry)));
+      } else {
+        setExpenses((current) => [...current, expense]);
+      }
+      closeExpenseSheet();
+      showToast(copy.saved);
+    } finally {
+      submitting.current = false;
+    }
+  }
+
+  async function confirmDeleteExpenseAction() {
+    if (submitting.current || editingExpenseId === null) return;
+    submitting.current = true;
+    try {
+      const response = await fetch(
+        `/api/gatherings/${gatheringId}/expenses/${editingExpenseId}`,
+        { method: "DELETE" },
+      );
+      if (!response.ok) return;
+      setExpenses((current) => current.filter((entry) => entry.id !== editingExpenseId));
+      closeExpenseSheet();
       showToast(copy.saved);
     } finally {
       submitting.current = false;
@@ -198,16 +339,46 @@ export function GatheringView({
   );
 
   const expensesSection = (
-    <section>
+    <section aria-label={copy.expenses}>
       <h2>{copy.expenses}</h2>
-      {!hasExpenses ? <p className="empty">{copy.noExpenses}</p> : null}
+      {hasExpenses ? (
+        <ul className="expense-list">
+          {expenses.map((expense) => (
+            <li key={expense.id}>
+              <button
+                type="button"
+                className="expense-row"
+                onClick={() => openExpenseEdit(expense)}
+              >
+                <div className="expense-row-head">
+                  <span className="expense-desc">{expense.description}</span>
+                  <span className="money">{formatHkd(expense.amountCents)}</span>
+                </div>
+                <p className="expense-meta">
+                  付款人 {expense.payerName}
+                </p>
+                <ul className="expense-shares">
+                  {expense.shares.map((share) => (
+                    <li key={share.participantId}>
+                      <span>{share.name}</span>
+                      <span className="money">{formatHkd(share.amountCents)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="empty">{copy.noExpenses}</p>
+      )}
     </section>
   );
 
   const settlementSection = (
-    <section>
+    <section aria-label={copy.settlement}>
       <h2>{copy.settlement}</h2>
-      <p className="empty">{copy.noBills}</p>
+      {!hasExpenses ? <p className="empty">{copy.noBills}</p> : null}
     </section>
   );
 
@@ -240,13 +411,18 @@ export function GatheringView({
         )}
       </main>
       <div className="dock">
-        <button className="primary" type="button">
+        <button
+          className="primary"
+          type="button"
+          disabled={participants.length === 0}
+          onClick={openExpenseCreate}
+        >
           {copy.addExpense}
         </button>
       </div>
 
-      {sheet ? (
-        <div className="sheet-root" role="presentation" onClick={closeSheet}>
+      {personSheet ? (
+        <div className="sheet-root" role="presentation" onClick={closePersonSheet}>
           <div
             className="sheet"
             role="dialog"
@@ -254,7 +430,9 @@ export function GatheringView({
             aria-labelledby="person-sheet-title"
             onClick={(event) => event.stopPropagation()}
           >
-            <h2 id="person-sheet-title">{sheet === "add" ? copy.addPersonTitle : copy.managePerson}</h2>
+            <h2 id="person-sheet-title">
+              {personSheet === "add" ? copy.addPersonTitle : copy.managePerson}
+            </h2>
             <label htmlFor="person-name">{copy.personNameLabel}</label>
             <input
               id="person-name"
@@ -262,7 +440,7 @@ export function GatheringView({
               autoComplete="off"
               onChange={(event) => setNameInput(event.target.value)}
             />
-            {fieldError ? (
+            {fieldError && !expenseSheet ? (
               <p className="alert" role="alert">
                 {fieldError}
               </p>
@@ -272,14 +450,18 @@ export function GatheringView({
                 {blockedDelete}
               </p>
             ) : null}
-            {confirmDelete && activeParticipant ? (
+            {confirmDeletePerson && activeParticipant ? (
               <div className="confirm-box">
                 <p>{copy.deletePersonConfirm(activeParticipant.name)}</p>
                 <div className="confirm-actions">
-                  <button className="ghost" type="button" onClick={() => setConfirmDelete(false)}>
+                  <button
+                    className="ghost"
+                    type="button"
+                    onClick={() => setConfirmDeletePerson(false)}
+                  >
                     {copy.cancel}
                   </button>
-                  <button className="primary inline" type="button" onClick={confirmDeletePerson}>
+                  <button className="primary inline" type="button" onClick={confirmDeletePersonAction}>
                     {copy.confirm}
                   </button>
                 </div>
@@ -289,16 +471,121 @@ export function GatheringView({
                 <button
                   className="primary"
                   type="button"
-                  onClick={sheet === "add" ? submitAdd : submitRename}
+                  onClick={personSheet === "add" ? submitAdd : submitRename}
                 >
-                  {sheet === "add" ? copy.confirm : copy.save}
+                  {personSheet === "add" ? copy.confirm : copy.save}
                 </button>
-                {sheet === "manage" ? (
-                  <button className="ghost danger" type="button" onClick={requestDelete}>
+                {personSheet === "manage" ? (
+                  <button className="ghost danger" type="button" onClick={requestDeletePerson}>
                     {copy.deletePerson}
                   </button>
                 ) : null}
-                <button className="ghost sheet-cancel" type="button" onClick={closeSheet}>
+                <button className="ghost sheet-cancel" type="button" onClick={closePersonSheet}>
+                  {copy.cancel}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      {expenseSheet ? (
+        <div className="sheet-root" role="presentation" onClick={closeExpenseSheet}>
+          <div
+            className="sheet"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="expense-sheet-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 id="expense-sheet-title">
+              {expenseSheet === "edit" ? copy.editExpense : copy.addExpense}
+            </h2>
+            <label htmlFor="expense-description">{copy.expenseDescriptionLabel}</label>
+            <input
+              id="expense-description"
+              value={descriptionInput}
+              autoComplete="off"
+              onChange={(event) => setDescriptionInput(event.target.value)}
+            />
+            <label htmlFor="expense-amount">{copy.expenseAmountLabel}</label>
+            <div className="amount-field">
+              <span className="amount-prefix">HK$</span>
+              <input
+                id="expense-amount"
+                inputMode="decimal"
+                value={amountInput}
+                autoComplete="off"
+                onChange={(event) => setAmountInput(event.target.value)}
+              />
+            </div>
+            <p className="field-label">{copy.expensePayerLabel}</p>
+            <ul className="choice-list">
+              {participants.map((person) => (
+                <li key={person.id}>
+                  <label className="choice-row">
+                    <input
+                      type="radio"
+                      name="expense-payer"
+                      checked={payerId === person.id}
+                      onChange={() => setPayerId(person.id)}
+                    />
+                    <span>{person.name}</span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+            <p className="field-label">{copy.expenseShareesLabel}</p>
+            <ul className="choice-list">
+              {participants.map((person) => (
+                <li key={person.id}>
+                  <label className="choice-row">
+                    <input
+                      type="checkbox"
+                      checked={shareeIds.includes(person.id)}
+                      onChange={() => toggleSharee(person.id)}
+                    />
+                    <span>{person.name}</span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+            {fieldError && expenseSheet ? (
+              <p className="alert" role="alert">
+                {fieldError}
+              </p>
+            ) : null}
+            {confirmDeleteExpense ? (
+              <div className="confirm-box">
+                <p>{copy.deleteExpenseConfirm}</p>
+                <div className="confirm-actions">
+                  <button
+                    className="ghost"
+                    type="button"
+                    onClick={() => setConfirmDeleteExpense(false)}
+                  >
+                    {copy.cancel}
+                  </button>
+                  <button className="primary inline" type="button" onClick={confirmDeleteExpenseAction}>
+                    {copy.confirm}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <button className="primary" type="button" onClick={submitExpense}>
+                  {copy.save}
+                </button>
+                {expenseSheet === "edit" ? (
+                  <button
+                    className="ghost danger"
+                    type="button"
+                    onClick={() => setConfirmDeleteExpense(true)}
+                  >
+                    {copy.deleteExpense}
+                  </button>
+                ) : null}
+                <button className="ghost sheet-cancel" type="button" onClick={closeExpenseSheet}>
                   {copy.cancel}
                 </button>
               </>
@@ -323,4 +610,48 @@ function parseParticipant(data: unknown): Participant | null {
   const name = data.name;
   if (typeof id !== "number" || typeof name !== "string") return null;
   return { id, name };
+}
+
+function parseExpense(data: unknown): ExpenseView | null {
+  if (!data || typeof data !== "object") return null;
+  const record = data as Record<string, unknown>;
+  if (
+    typeof record.id !== "number" ||
+    typeof record.description !== "string" ||
+    typeof record.amountCents !== "number" ||
+    typeof record.payerParticipantId !== "number" ||
+    typeof record.payerName !== "string" ||
+    !Array.isArray(record.shareeParticipantIds) ||
+    !Array.isArray(record.shares)
+  ) {
+    return null;
+  }
+  const shares = record.shares
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") return null;
+      const share = entry as Record<string, unknown>;
+      if (
+        typeof share.participantId !== "number" ||
+        typeof share.name !== "string" ||
+        typeof share.amountCents !== "number"
+      ) {
+        return null;
+      }
+      return {
+        participantId: share.participantId,
+        name: share.name,
+        amountCents: share.amountCents,
+      };
+    })
+    .filter((entry): entry is ExpenseView["shares"][number] => entry !== null);
+  if (shares.length !== record.shares.length) return null;
+  return {
+    id: record.id,
+    description: record.description,
+    amountCents: record.amountCents,
+    payerParticipantId: record.payerParticipantId,
+    payerName: record.payerName,
+    shareeParticipantIds: record.shareeParticipantIds.filter((id): id is number => typeof id === "number"),
+    shares,
+  };
 }

@@ -37,6 +37,8 @@ export function getDb(): Database.Database {
     CREATE TABLE IF NOT EXISTS expenses (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       gathering_id TEXT NOT NULL,
+      description TEXT NOT NULL,
+      amount_cents INTEGER NOT NULL,
       payer_participant_id INTEGER NOT NULL,
       created_at TEXT NOT NULL,
       FOREIGN KEY (gathering_id) REFERENCES gatherings(id) ON DELETE CASCADE,
@@ -51,6 +53,18 @@ export function getDb(): Database.Database {
       FOREIGN KEY (participant_id) REFERENCES participants(id)
     );
   `);
+  migrateExpensesColumns(database);
   openedPath = file;
   return database;
+}
+
+function migrateExpensesColumns(db: Database.Database) {
+  const columns = db.prepare("PRAGMA table_info(expenses)").all() as { name: string }[];
+  const names = new Set(columns.map((column) => column.name));
+  if (!names.has("description")) {
+    db.exec("ALTER TABLE expenses ADD COLUMN description TEXT NOT NULL DEFAULT ''");
+  }
+  if (!names.has("amount_cents")) {
+    db.exec("ALTER TABLE expenses ADD COLUMN amount_cents INTEGER NOT NULL DEFAULT 100");
+  }
 }
