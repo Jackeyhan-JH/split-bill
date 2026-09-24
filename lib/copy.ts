@@ -23,6 +23,7 @@ export const copy = {
   cancel: "取消",
   deletePerson: "删除此人",
   saved: "已保存",
+  linkCopied: "已复制链接",
   deletePersonConfirm: (name: string) => `确定删除「${name}」？`,
   personOnExpense: "这个人已出现在账目中，请先改账再删除",
   noPeople: "还没有参与人，点「+ 加人」",

@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatHkd } from "@/lib/amount";
+import { copyTextToClipboard } from "@/lib/clipboard";
 import { copy } from "@/lib/copy";
+import { shareGatheringLink } from "@/lib/share-link";
 import type { ExpenseView } from "@/lib/expenses";
 import {
   computeSettlement,
@@ -326,6 +328,21 @@ export function GatheringView({
     }
   }
 
+  async function handleCopyLink() {
+    if (typeof window === "undefined") return;
+    dismissToast();
+    const ok = await copyTextToClipboard(window.location.href);
+    if (ok) showToast(copy.linkCopied);
+  }
+
+  async function handleShare() {
+    if (typeof window === "undefined") return;
+    dismissToast();
+    const url = window.location.href;
+    const result = await shareGatheringLink(url, gatheringName);
+    if (result === "copied") showToast(copy.linkCopied);
+  }
+
   async function confirmDeleteExpenseAction() {
     if (submitting.current || editingExpenseId === null) return;
     submitting.current = true;
@@ -463,10 +480,10 @@ export function GatheringView({
         <div className="gathering-top">
           <h1>{gatheringName}</h1>
           <div className="gathering-actions">
-            <button className="ghost" type="button">
+            <button className="ghost" type="button" onClick={() => void handleCopyLink()}>
               {copy.copyLink}
             </button>
-            <button className="ghost" type="button">
+            <button className="ghost" type="button" onClick={() => void handleShare()}>
               {copy.share}
             </button>
           </div>
