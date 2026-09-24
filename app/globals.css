@@ -1,0 +1,119 @@
+:root {
+  --text: #111111;
+  --muted: #4a4a4a;
+  --line: #d8d8d8;
+  --canvas: #f3f3f3;
+  --paper: #ffffff;
+  --accent: #1a56db;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  min-height: 100dvh;
+  background: var(--canvas);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.shell {
+  width: 100%;
+  max-width: 375px;
+  min-height: 100dvh;
+  margin: 0 auto;
+  padding: 24px 16px 32px;
+  background: var(--paper);
+  border-left: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+}
+
+h1 {
+  margin: 0 0 8px;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.tagline,
+.detail,
+.alert {
+  margin: 0;
+  font-size: 16px;
+}
+
+.tagline,
+.detail {
+  color: var(--muted);
+}
+
+.tagline {
+  margin-bottom: 24px;
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+label {
+  font-size: 16px;
+}
+
+input {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 0;
+  background: var(--paper);
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+}
+
+.primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 44px;
+  min-width: 44px;
+  margin-top: 4px;
+  padding: 0 16px;
+  border: 0;
+  background: var(--accent);
+  color: #ffffff;
+  font: inherit;
+  font-size: 16px;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.primary:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.alert {
+  margin-top: 4px;
+}
+
+.detail {
+  margin: 8px 0 24px;
+}
+
+.not-found .primary {
+  margin-top: 8px;
+}
