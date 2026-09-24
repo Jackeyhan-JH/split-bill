@@ -8,11 +8,11 @@ export const dynamic = "force-dynamic";
 
 export default async function GatheringPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const gathering = getGathering(id);
+  const gathering = await getGathering(id);
   if (!gathering) notFound();
 
-  const participants = listParticipants(id);
-  const expenses = listExpenses(id);
+  const participants = await listParticipants(id);
+  const expenses = await listExpenses(id);
 
   return (
     <GatheringView

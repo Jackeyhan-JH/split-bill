@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
-const databasePath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "split-bill-")), "test.sqlite");
+const databasePath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "split-bill-")), "test.db");
 
 export default defineConfig({
   test: {
@@ -13,7 +13,7 @@ export default defineConfig({
     include: ["tests/**/*.test.ts"],
     fileParallelism: false,
     env: {
-      DATABASE_PATH: databasePath,
+      TURSO_DATABASE_URL: `file:${databasePath}`,
     },
   },
   resolve: {

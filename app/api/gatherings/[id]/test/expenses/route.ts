@@ -25,7 +25,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       ? (body as { splitterParticipantIds: unknown[] }).splitterParticipantIds.map(Number)
       : [];
 
-  const expenseId = seedExpense(id, { payerParticipantId, splitterParticipantIds });
+  const expenseId = await seedExpense(id, { payerParticipantId, splitterParticipantIds });
   if (expenseId === null) {
     return Response.json({ error: copy.notFoundTitle }, { status: 404 });
   }

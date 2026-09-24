@@ -5,15 +5,18 @@ import { getGathering } from "./gatherings";
 import { listParticipants } from "./participants";
 import { computeShareCents } from "./split";
 
-export function participantHasExpenseRole(participantId: number): boolean {
-  const asPayer = getDb()
-    .prepare("SELECT 1 FROM expenses WHERE payer_participant_id = ? LIMIT 1")
-    .get(participantId);
-  if (asPayer !== undefined) return true;
-  const asSplitter = getDb()
-    .prepare("SELECT 1 FROM expense_splits WHERE participant_id = ? LIMIT 1")
-    .get(participantId);
-  return asSplitter !== undefined;
+export async function participantHasExpenseRole(participantId: number): Promise<boolean> {
+  const db = await getDb();
+  const asPayer = await db.execute({
+    sql: "SELECT 1 FROM expenses WHERE payer_participant_id = ? LIMIT 1",
+    args: [participantId],
+  });
+  if (asPayer.rows.length > 0) return true;
+  const asSplitter = await db.execute({
+    sql: "SELECT 1 FROM expense_splits WHERE participant_id = ? LIMIT 1",
+    args: [participantId],
+  });
+  return asSplitter.rows.length > 0;
 }
 
 export type ExpenseShareView = {
@@ -58,16 +61,16 @@ function normalizeShareeIds(raw: unknown): number[] | null {
   return ids;
 }
 
-function participantMap(gatheringId: string): Map<number, string> {
+async function participantMap(gatheringId: string): Promise<Map<number, string>> {
   const map = new Map<number, string>();
-  for (const person of listParticipants(gatheringId)) {
+  for (const person of await listParticipants(gatheringId)) {
     map.set(person.id, person.name);
   }
   return map;
 }
 
-function shareeIdsInJoinOrder(gatheringId: string, selectedIds: number[]): number[] | null {
-  const joined = listParticipants(gatheringId).map((person) => person.id);
+async function shareeIdsInJoinOrder(gatheringId: string, selectedIds: number[]): Promise<number[] | null> {
+  const joined = (await listParticipants(gatheringId)).map((person) => person.id);
   const selected = new Set(selectedIds);
   const ordered = joined.filter((id) => selected.has(id));
   if (ordered.length !== selectedIds.length) return null;
@@ -98,58 +101,66 @@ function buildExpenseView(
   };
 }
 
-function readShareeIds(expenseId: number): number[] {
-  const rows = getDb()
-    .prepare(
-      `SELECT es.participant_id AS id
+async function readShareeIds(expenseId: number): Promise<number[]> {
+  const db = await getDb();
+  const result = await db.execute({
+    sql: `SELECT es.participant_id AS id
        FROM expense_splits es
        INNER JOIN participants p ON p.id = es.participant_id
        WHERE es.expense_id = ?
        ORDER BY p.id ASC`,
-    )
-    .all(expenseId) as { id: number }[];
-  return rows.map((row) => row.id);
+    args: [expenseId],
+  });
+  return result.rows.map((row) => Number(row.id));
 }
 
-export function listExpenses(gatheringId: string): ExpenseView[] {
-  if (!getGathering(gatheringId)) return [];
-  const names = participantMap(gatheringId);
-  const rows = getDb()
-    .prepare(
-      "SELECT id, description, amount_cents, payer_participant_id FROM expenses WHERE gathering_id = ? ORDER BY id ASC",
-    )
-    .all(gatheringId) as {
-    id: number;
-    description: string;
-    amount_cents: number;
-    payer_participant_id: number;
-  }[];
+function readExpenseRow(row: Record<string, unknown>) {
+  return {
+    id: Number(row.id),
+    description: String(row.description),
+    amount_cents: Number(row.amount_cents),
+    payer_participant_id: Number(row.payer_participant_id),
+  };
+}
+
+export async function listExpenses(gatheringId: string): Promise<ExpenseView[]> {
+  if (!(await getGathering(gatheringId))) return [];
+  const names = await participantMap(gatheringId);
+  const db = await getDb();
+  const result = await db.execute({
+    sql: "SELECT id, description, amount_cents, payer_participant_id FROM expenses WHERE gathering_id = ? ORDER BY id ASC",
+    args: [gatheringId],
+  });
   const views: ExpenseView[] = [];
-  for (const row of rows) {
-    const shareeIds = readShareeIds(row.id);
+  for (const raw of result.rows) {
+    const row = readExpenseRow(raw as Record<string, unknown>);
+    const shareeIds = await readShareeIds(row.id);
     const view = buildExpenseView(row, names, shareeIds);
     if (view) views.push(view);
   }
   return views;
 }
 
-function validateExpenseInput(
+async function validateExpenseInput(
   gatheringId: string,
   body: unknown,
-): ExpenseResult<{
-  description: string;
-  amountCents: number;
-  payerParticipantId: number;
-  shareeIds: number[];
-}> {
-  if (!getGathering(gatheringId)) return { ok: false, error: copy.notFoundTitle };
+): Promise<
+  ExpenseResult<{
+    description: string;
+    amountCents: number;
+    payerParticipantId: number;
+    shareeIds: number[];
+  }>
+> {
+  if (!(await getGathering(gatheringId))) return { ok: false, error: copy.notFoundTitle };
   if (!body || typeof body !== "object") {
     return { ok: false, error: copy.descriptionRequired };
   }
   const description = normalizeDescription("description" in body ? body.description : null);
   if (!description) return { ok: false, error: copy.descriptionRequired };
 
-  const amountField = "amount" in body ? body.amount : "amountCents" in body ? (body as { amountCents: number }).amountCents / 100 : null;
+  const amountField =
+    "amount" in body ? body.amount : "amountCents" in body ? (body as { amountCents: number }).amountCents / 100 : null;
   const amountParsed = parseAmountCents(amountField);
   if (!amountParsed.ok) return { ok: false, error: amountParsed.error };
 
@@ -163,9 +174,9 @@ function validateExpenseInput(
   const shareeIds = normalizeShareeIds(shareeRaw);
   if (!shareeIds || shareeIds.length === 0) return { ok: false, error: copy.shareesRequired };
 
-  const names = participantMap(gatheringId);
+  const names = await participantMap(gatheringId);
   if (!names.has(payerParticipantId)) return { ok: false, error: copy.payerRequired };
-  const ordered = shareeIdsInJoinOrder(gatheringId, shareeIds);
+  const ordered = await shareeIdsInJoinOrder(gatheringId, shareeIds);
   if (!ordered) return { ok: false, error: copy.shareesRequired };
 
   return {
@@ -179,29 +190,28 @@ function validateExpenseInput(
   };
 }
 
-export function createExpense(gatheringId: string, body: unknown): ExpenseResult<ExpenseView> {
-  const validated = validateExpenseInput(gatheringId, body);
+export async function createExpense(gatheringId: string, body: unknown): Promise<ExpenseResult<ExpenseView>> {
+  const validated = await validateExpenseInput(gatheringId, body);
   if (!validated.ok) return validated;
   const { description, amountCents, payerParticipantId, shareeIds } = validated.value;
   const createdAt = new Date().toISOString();
-  const db = getDb();
-  const expenseId = db.transaction(() => {
-    const result = db
-      .prepare(
-        "INSERT INTO expenses (gathering_id, description, amount_cents, payer_participant_id, created_at) VALUES (?, ?, ?, ?, ?)",
-      )
-      .run(gatheringId, description, amountCents, payerParticipantId, createdAt);
-    const id = Number(result.lastInsertRowid);
-    const insertSplit = db.prepare(
-      "INSERT INTO expense_splits (expense_id, participant_id) VALUES (?, ?)",
+  const db = await getDb();
+  const insert = await db.execute({
+    sql: "INSERT INTO expenses (gathering_id, description, amount_cents, payer_participant_id, created_at) VALUES (?, ?, ?, ?, ?)",
+    args: [gatheringId, description, amountCents, payerParticipantId, createdAt],
+  });
+  const expenseId = Number(insert.lastInsertRowid);
+  if (shareeIds.length > 0) {
+    await db.batch(
+      shareeIds.map((participantId) => ({
+        sql: "INSERT INTO expense_splits (expense_id, participant_id) VALUES (?, ?)",
+        args: [expenseId, participantId],
+      })),
+      "write",
     );
-    for (const participantId of shareeIds) {
-      insertSplit.run(id, participantId);
-    }
-    return id;
-  })();
+  }
 
-  const names = participantMap(gatheringId);
+  const names = await participantMap(gatheringId);
   const row = {
     id: expenseId,
     description,
@@ -213,36 +223,42 @@ export function createExpense(gatheringId: string, body: unknown): ExpenseResult
   return { ok: true, value: view };
 }
 
-export function updateExpense(
+export async function updateExpense(
   gatheringId: string,
   expenseId: number,
   body: unknown,
-): ExpenseResult<ExpenseView> {
-  if (!getGathering(gatheringId)) return { ok: false, error: copy.notFoundTitle };
-  const existing = getDb()
-    .prepare("SELECT id FROM expenses WHERE id = ? AND gathering_id = ?")
-    .get(expenseId, gatheringId);
-  if (!existing) return { ok: false, error: copy.notFoundTitle };
+): Promise<ExpenseResult<ExpenseView>> {
+  if (!(await getGathering(gatheringId))) return { ok: false, error: copy.notFoundTitle };
+  const db = await getDb();
+  const existing = await db.execute({
+    sql: "SELECT id FROM expenses WHERE id = ? AND gathering_id = ?",
+    args: [expenseId, gatheringId],
+  });
+  if (existing.rows.length === 0) return { ok: false, error: copy.notFoundTitle };
 
-  const validated = validateExpenseInput(gatheringId, body);
+  const validated = await validateExpenseInput(gatheringId, body);
   if (!validated.ok) return validated;
   const { description, amountCents, payerParticipantId, shareeIds } = validated.value;
 
-  const db = getDb();
-  db.transaction(() => {
-    db.prepare(
-      "UPDATE expenses SET description = ?, amount_cents = ?, payer_participant_id = ? WHERE id = ? AND gathering_id = ?",
-    ).run(description, amountCents, payerParticipantId, expenseId, gatheringId);
-    db.prepare("DELETE FROM expense_splits WHERE expense_id = ?").run(expenseId);
-    const insertSplit = db.prepare(
-      "INSERT INTO expense_splits (expense_id, participant_id) VALUES (?, ?)",
-    );
-    for (const participantId of shareeIds) {
-      insertSplit.run(expenseId, participantId);
-    }
-  })();
+  await db.batch(
+    [
+      {
+        sql: "UPDATE expenses SET description = ?, amount_cents = ?, payer_participant_id = ? WHERE id = ? AND gathering_id = ?",
+        args: [description, amountCents, payerParticipantId, expenseId, gatheringId],
+      },
+      {
+        sql: "DELETE FROM expense_splits WHERE expense_id = ?",
+        args: [expenseId],
+      },
+      ...shareeIds.map((participantId) => ({
+        sql: "INSERT INTO expense_splits (expense_id, participant_id) VALUES (?, ?)",
+        args: [expenseId, participantId],
+      })),
+    ],
+    "write",
+  );
 
-  const names = participantMap(gatheringId);
+  const names = await participantMap(gatheringId);
   const row = {
     id: expenseId,
     description,
@@ -254,13 +270,21 @@ export function updateExpense(
   return { ok: true, value: view };
 }
 
-export function deleteExpense(gatheringId: string, expenseId: number): ExpenseResult<{ id: number }> {
-  if (!getGathering(gatheringId)) return { ok: false, error: copy.notFoundTitle };
-  const existing = getDb()
-    .prepare("SELECT id FROM expenses WHERE id = ? AND gathering_id = ?")
-    .get(expenseId, gatheringId);
-  if (!existing) return { ok: false, error: copy.notFoundTitle };
-  getDb().prepare("DELETE FROM expenses WHERE id = ? AND gathering_id = ?").run(expenseId, gatheringId);
+export async function deleteExpense(
+  gatheringId: string,
+  expenseId: number,
+): Promise<ExpenseResult<{ id: number }>> {
+  if (!(await getGathering(gatheringId))) return { ok: false, error: copy.notFoundTitle };
+  const db = await getDb();
+  const existing = await db.execute({
+    sql: "SELECT id FROM expenses WHERE id = ? AND gathering_id = ?",
+    args: [expenseId, gatheringId],
+  });
+  if (existing.rows.length === 0) return { ok: false, error: copy.notFoundTitle };
+  await db.execute({
+    sql: "DELETE FROM expenses WHERE id = ? AND gathering_id = ?",
+    args: [expenseId, gatheringId],
+  });
   return { ok: true, value: { id: expenseId } };
 }
 
@@ -271,40 +295,41 @@ export type SeedExpenseInput = {
   amountCents?: number;
 };
 
-export function seedExpense(gatheringId: string, input: SeedExpenseInput): number | null {
-  if (!getGathering(gatheringId)) return null;
+export async function seedExpense(gatheringId: string, input: SeedExpenseInput): Promise<number | null> {
+  if (!(await getGathering(gatheringId))) return null;
   const { payerParticipantId, splitterParticipantIds } = input;
   if (!splitterParticipantIds.length) return null;
 
-  const db = getDb();
-  const verify = db.prepare(
-    "SELECT 1 FROM participants WHERE gathering_id = ? AND id = ? LIMIT 1",
-  );
-  if (!verify.get(gatheringId, payerParticipantId)) return null;
+  const db = await getDb();
+  const verify = async (participantId: number) => {
+    const result = await db.execute({
+      sql: "SELECT 1 FROM participants WHERE gathering_id = ? AND id = ? LIMIT 1",
+      args: [gatheringId, participantId],
+    });
+    return result.rows.length > 0;
+  };
+  if (!(await verify(payerParticipantId))) return null;
   for (const id of splitterParticipantIds) {
-    if (!verify.get(gatheringId, id)) return null;
+    if (!(await verify(id))) return null;
   }
 
-  const ordered = shareeIdsInJoinOrder(gatheringId, splitterParticipantIds);
+  const ordered = await shareeIdsInJoinOrder(gatheringId, splitterParticipantIds);
   if (!ordered) return null;
 
   const description = input.description?.trim() || "测试";
   const amountCents = input.amountCents ?? 100;
   const createdAt = new Date().toISOString();
-  const insert = db.transaction(() => {
-    const result = db
-      .prepare(
-        "INSERT INTO expenses (gathering_id, description, amount_cents, payer_participant_id, created_at) VALUES (?, ?, ?, ?, ?)",
-      )
-      .run(gatheringId, description, amountCents, payerParticipantId, createdAt);
-    const expenseId = Number(result.lastInsertRowid);
-    const splitInsert = db.prepare(
-      "INSERT INTO expense_splits (expense_id, participant_id) VALUES (?, ?)",
-    );
-    for (const participantId of ordered) {
-      splitInsert.run(expenseId, participantId);
-    }
-    return expenseId;
+  const insert = await db.execute({
+    sql: "INSERT INTO expenses (gathering_id, description, amount_cents, payer_participant_id, created_at) VALUES (?, ?, ?, ?, ?)",
+    args: [gatheringId, description, amountCents, payerParticipantId, createdAt],
   });
-  return insert();
+  const expenseId = Number(insert.lastInsertRowid);
+  await db.batch(
+    ordered.map((participantId) => ({
+      sql: "INSERT INTO expense_splits (expense_id, participant_id) VALUES (?, ?)",
+      args: [expenseId, participantId],
+    })),
+    "write",
+  );
+  return expenseId;
 }

@@ -27,85 +27,106 @@ function readRow(row: unknown): Participant | null {
   if (!("id" in row) || !("name" in row)) return null;
   const id = row.id;
   const name = row.name;
-  if (typeof id !== "number" || typeof name !== "string") return null;
-  return { id, name };
+  const numericId = typeof id === "bigint" ? Number(id) : id;
+  if (typeof numericId !== "number" || typeof name !== "string") return null;
+  return { id: numericId, name };
 }
 
-export function listParticipants(gatheringId: string): Participant[] {
-  const rows = getDb()
-    .prepare("SELECT id, name FROM participants WHERE gathering_id = ? ORDER BY id ASC")
-    .all(gatheringId);
-  return rows.map((row) => readRow(row)).filter((row): row is Participant => row !== null);
+export async function listParticipants(gatheringId: string): Promise<Participant[]> {
+  const db = await getDb();
+  const result = await db.execute({
+    sql: "SELECT id, name FROM participants WHERE gathering_id = ? ORDER BY id ASC",
+    args: [gatheringId],
+  });
+  return result.rows.map((row) => readRow(row)).filter((row): row is Participant => row !== null);
 }
 
-function nameTaken(gatheringId: string, name: string, exceptId?: number): boolean {
-  const row = exceptId
-    ? getDb()
-        .prepare(
-          "SELECT 1 FROM participants WHERE gathering_id = ? AND name = ? AND id != ? LIMIT 1",
-        )
-        .get(gatheringId, name, exceptId)
-    : getDb()
-        .prepare("SELECT 1 FROM participants WHERE gathering_id = ? AND name = ? LIMIT 1")
-        .get(gatheringId, name);
-  return row !== undefined;
+async function nameTaken(gatheringId: string, name: string, exceptId?: number): Promise<boolean> {
+  const db = await getDb();
+  const result = exceptId
+    ? await db.execute({
+        sql: "SELECT 1 FROM participants WHERE gathering_id = ? AND name = ? AND id != ? LIMIT 1",
+        args: [gatheringId, name, exceptId],
+      })
+    : await db.execute({
+        sql: "SELECT 1 FROM participants WHERE gathering_id = ? AND name = ? LIMIT 1",
+        args: [gatheringId, name],
+      });
+  return result.rows.length > 0;
 }
 
-export function addParticipant(gatheringId: string, rawName: unknown): ParticipantResult<Participant> {
-  if (!getGathering(gatheringId)) return { ok: false, error: copy.notFoundTitle };
+export async function addParticipant(
+  gatheringId: string,
+  rawName: unknown,
+): Promise<ParticipantResult<Participant>> {
+  if (!(await getGathering(gatheringId))) return { ok: false, error: copy.notFoundTitle };
   const name = normalizeName(rawName);
   if (!name) return { ok: false, error: copy.personNameRequired };
-  if (nameTaken(gatheringId, name)) return { ok: false, error: copy.personNameDuplicate };
+  if (await nameTaken(gatheringId, name)) return { ok: false, error: copy.personNameDuplicate };
 
+  const db = await getDb();
   const createdAt = new Date().toISOString();
-  const result = getDb()
-    .prepare("INSERT INTO participants (gathering_id, name, created_at) VALUES (?, ?, ?)")
-    .run(gatheringId, name, createdAt);
-  const id = Number(result.lastInsertRowid);
+  const insert = await db.execute({
+    sql: "INSERT INTO participants (gathering_id, name, created_at) VALUES (?, ?, ?)",
+    args: [gatheringId, name, createdAt],
+  });
+  const id = Number(insert.lastInsertRowid);
   return { ok: true, value: { id, name } };
 }
 
-export function renameParticipant(
+export async function renameParticipant(
   gatheringId: string,
   participantId: number,
   rawName: unknown,
-): ParticipantResult<Participant> {
-  if (!getGathering(gatheringId)) return { ok: false, error: copy.notFoundTitle };
-  const existing = getDb()
-    .prepare("SELECT id, name FROM participants WHERE id = ? AND gathering_id = ?")
-    .get(participantId, gatheringId);
-  if (!readRow(existing)) return { ok: false, error: copy.notFoundTitle };
+): Promise<ParticipantResult<Participant>> {
+  if (!(await getGathering(gatheringId))) return { ok: false, error: copy.notFoundTitle };
+  const db = await getDb();
+  const existing = await db.execute({
+    sql: "SELECT id, name FROM participants WHERE id = ? AND gathering_id = ?",
+    args: [participantId, gatheringId],
+  });
+  if (!readRow(existing.rows[0])) return { ok: false, error: copy.notFoundTitle };
 
   const name = normalizeName(rawName);
   if (!name) return { ok: false, error: copy.personNameRequired };
-  if (nameTaken(gatheringId, name, participantId)) return { ok: false, error: copy.personNameDuplicate };
+  if (await nameTaken(gatheringId, name, participantId)) {
+    return { ok: false, error: copy.personNameDuplicate };
+  }
 
-  getDb()
-    .prepare("UPDATE participants SET name = ? WHERE id = ? AND gathering_id = ?")
-    .run(name, participantId, gatheringId);
+  await db.execute({
+    sql: "UPDATE participants SET name = ? WHERE id = ? AND gathering_id = ?",
+    args: [name, participantId, gatheringId],
+  });
   return { ok: true, value: { id: participantId, name } };
 }
 
-export function removeParticipant(
+export async function removeParticipant(
   gatheringId: string,
   participantId: number,
-): ParticipantResult<{ id: number }> {
-  if (!getGathering(gatheringId)) return { ok: false, error: copy.notFoundTitle };
-  const existing = getDb()
-    .prepare("SELECT id FROM participants WHERE id = ? AND gathering_id = ?")
-    .get(participantId, gatheringId);
-  if (!existing) return { ok: false, error: copy.notFoundTitle };
-  if (participantHasExpenseRole(participantId)) {
+): Promise<ParticipantResult<{ id: number }>> {
+  if (!(await getGathering(gatheringId))) return { ok: false, error: copy.notFoundTitle };
+  const db = await getDb();
+  const existing = await db.execute({
+    sql: "SELECT id FROM participants WHERE id = ? AND gathering_id = ?",
+    args: [participantId, gatheringId],
+  });
+  if (existing.rows.length === 0) return { ok: false, error: copy.notFoundTitle };
+  if (await participantHasExpenseRole(participantId)) {
     return { ok: false, error: copy.personOnExpense };
   }
 
-  getDb().prepare("DELETE FROM participants WHERE id = ? AND gathering_id = ?").run(participantId, gatheringId);
+  await db.execute({
+    sql: "DELETE FROM participants WHERE id = ? AND gathering_id = ?",
+    args: [participantId, gatheringId],
+  });
   return { ok: true, value: { id: participantId } };
 }
 
-export function gatheringHasExpenses(gatheringId: string): boolean {
-  const row = getDb()
-    .prepare("SELECT 1 FROM expenses WHERE gathering_id = ? LIMIT 1")
-    .get(gatheringId);
-  return row !== undefined;
+export async function gatheringHasExpenses(gatheringId: string): Promise<boolean> {
+  const db = await getDb();
+  const result = await db.execute({
+    sql: "SELECT 1 FROM expenses WHERE gathering_id = ? LIMIT 1",
+    args: [gatheringId],
+  });
+  return result.rows.length > 0;
 }

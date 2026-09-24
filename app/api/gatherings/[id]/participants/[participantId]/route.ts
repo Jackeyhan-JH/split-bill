@@ -25,7 +25,7 @@ export async function PATCH(
   }
   const name =
     body && typeof body === "object" && "name" in body ? (body as { name: unknown }).name : undefined;
-  const result = renameParticipant(id, participantId, name);
+  const result = await renameParticipant(id, participantId, name);
   if (!result.ok) {
     const status =
       result.error === copy.notFoundTitle ? 404 : result.error === copy.personOnExpense ? 409 : 400;
@@ -44,7 +44,7 @@ export async function DELETE(
     return Response.json({ error: copy.notFoundTitle }, { status: 404 });
   }
 
-  const result = removeParticipant(id, participantId);
+  const result = await removeParticipant(id, participantId);
   if (!result.ok) {
     const status =
       result.error === copy.notFoundTitle ? 404 : result.error === copy.personOnExpense ? 409 : 400;

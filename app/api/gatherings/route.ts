@@ -11,7 +11,7 @@ async function readName(request: Request): Promise<unknown> {
 }
 
 export async function POST(request: Request) {
-  const result = createGathering(await readName(request));
+  const result = await createGathering(await readName(request));
   if (!result.ok) {
     return Response.json({ error: result.error }, { status: 400 });
   }
