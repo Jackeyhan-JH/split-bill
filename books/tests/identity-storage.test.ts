@@ -5,7 +5,7 @@ import {
   resolveMemberId,
   writeStoredMemberId,
   type StorageLike,
-} from "@/lib/identity-storage";
+} from "../lib/identity-storage";
 import { describe, expect, test } from "vitest";
 
 function memoryStorage(): StorageLike {

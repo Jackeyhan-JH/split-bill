@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { copy } from "@/lib/copy";
+import { copy } from "../../../lib/copy";
 
 export default function BookListNotFound() {
   return (

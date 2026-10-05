@@ -1,4 +1,4 @@
-import { createBookList } from "@/lib/book-lists";
+import { createBookList } from "../../../lib/book-lists";
 
 async function readName(request: Request): Promise<unknown> {
   try {

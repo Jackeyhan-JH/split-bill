@@ -1,5 +1,5 @@
-import { GET } from "@/app/api/book-lists/[id]/route";
-import { POST } from "@/app/api/book-lists/route";
+import { GET } from "../app/api/book-lists/[id]/route";
+import { POST } from "../app/api/book-lists/route";
 import { describe, expect, test } from "vitest";
 
 function post(body: unknown) {

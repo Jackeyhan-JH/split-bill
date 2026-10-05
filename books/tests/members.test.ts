@@ -1,6 +1,6 @@
-import { POST as createList } from "@/app/api/book-lists/route";
-import { GET, POST } from "@/app/api/book-lists/[id]/members/route";
-import { PATCH } from "@/app/api/book-lists/[id]/members/[memberId]/route";
+import { POST as createList } from "../app/api/book-lists/route";
+import { GET, POST } from "../app/api/book-lists/[id]/members/route";
+import { PATCH } from "../app/api/book-lists/[id]/members/[memberId]/route";
 import { describe, expect, test } from "vitest";
 
 async function seedList(name = "周末读书会") {

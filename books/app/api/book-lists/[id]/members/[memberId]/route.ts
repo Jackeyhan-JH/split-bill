@@ -1,5 +1,5 @@
-import { copy } from "@/lib/copy";
-import { renameMember } from "@/lib/members";
+import { copy } from "../../../../../../lib/copy";
+import { renameMember } from "../../../../../../lib/members";
 
 async function readName(request: Request): Promise<unknown> {
   try {

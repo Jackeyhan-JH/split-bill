@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { copy } from "@/lib/copy";
+import { copy } from "../lib/copy";
 
 export default function HomePage() {
   const router = useRouter();

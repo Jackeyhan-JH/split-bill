@@ -1,14 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { copy } from "@/lib/copy";
-import { copyTextToClipboard } from "@/lib/clipboard";
+import { copy } from "../../../lib/copy";
+import { copyTextToClipboard } from "../../../lib/clipboard";
 import {
   readStoredMemberId,
   resolveMemberId,
   writeStoredMemberId,
-} from "@/lib/identity-storage";
-import { shareListLink } from "@/lib/share-link";
+} from "../../../lib/identity-storage";
+import { shareListLink } from "../../../lib/share-link";
 
 export type Member = { id: number; name: string };
 

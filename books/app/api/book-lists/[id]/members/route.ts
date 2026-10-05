@@ -1,5 +1,5 @@
-import { copy } from "@/lib/copy";
-import { addMember, listMembers } from "@/lib/members";
+import { copy } from "../../../../../lib/copy";
+import { addMember, listMembers } from "../../../../../lib/members";
 
 async function readName(request: Request): Promise<unknown> {
   try {
@@ -15,7 +15,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const { id } = await params;
   const members = await listMembers(id);
   if (members.length === 0) {
-    const { getBookList } = await import("@/lib/book-lists");
+    const { getBookList } = await import("../../../../../lib/book-lists");
     if (!(await getBookList(id))) {
       return Response.json({ error: copy.notFoundTitle }, { status: 404 });
     }

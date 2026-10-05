@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { BookListView } from "./BookListView";
-import { listMembers } from "@/lib/members";
-import { getBookList } from "@/lib/book-lists";
+import { listMembers } from "../../../lib/members";
+import { getBookList } from "../../../lib/book-lists";
 
 export const dynamic = "force-dynamic";
 
