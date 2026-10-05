@@ -4,6 +4,7 @@ import { getBookList } from "./book-lists";
 import {
   MUST_READ_MAX,
   normalizeTitleKey,
+  type BookRating,
   type BookRow,
   type BookScore,
 } from "./book-scores";
@@ -35,14 +36,108 @@ function parseScore(raw: unknown): BookScore | null {
   return null;
 }
 
-function readBookRow(row: unknown, myScore: BookScore | null): BookRow | null {
+function readCreatedAt(row: unknown): string | null {
+  if (!row || typeof row !== "object" || !("created_at" in row)) return null;
+  const createdAt = row.created_at;
+  return typeof createdAt === "string" ? createdAt : null;
+}
+
+function readBookBase(row: unknown): Omit<BookRow, "myScore" | "ratings"> | null {
   if (!row || typeof row !== "object") return null;
   if (!("id" in row) || !("title" in row)) return null;
   const id = row.id;
   const title = row.title;
   const numericId = typeof id === "bigint" ? Number(id) : id;
-  if (typeof numericId !== "number" || typeof title !== "string") return null;
-  return { id: numericId, title, myScore };
+  const createdAt = readCreatedAt(row);
+  if (typeof numericId !== "number" || typeof title !== "string" || !createdAt) return null;
+  return { id: numericId, title, createdAt };
+}
+
+function parseRatingScore(raw: unknown): BookScore | null {
+  if (raw === 1 || raw === 2 || raw === 3) return raw;
+  if (typeof raw === "bigint") {
+    const n = Number(raw);
+    if (n === 1 || n === 2 || n === 3) return n;
+  }
+  if (typeof raw === "number") {
+    if (raw === 1 || raw === 2 || raw === 3) return raw;
+  }
+  return null;
+}
+
+function readRatingRow(row: unknown): BookRating | null {
+  if (!row || typeof row !== "object") return null;
+  if (!("member_id" in row) || !("score" in row) || !("updated_at" in row)) return null;
+  const memberId = row.member_id;
+  const score = parseRatingScore(row.score);
+  const ratedAt = row.updated_at;
+  const numericMemberId = typeof memberId === "bigint" ? Number(memberId) : memberId;
+  if (typeof numericMemberId !== "number" || score === null || typeof ratedAt !== "string") {
+    return null;
+  }
+  return { memberId: numericMemberId, score, ratedAt };
+}
+
+function readTitle(row: unknown): string | null {
+  if (!row || typeof row !== "object" || !("title" in row)) return null;
+  const title = row.title;
+  return typeof title === "string" ? title : null;
+}
+
+type DbClient = Awaited<ReturnType<typeof getDb>>;
+
+async function loadRatingsForList(db: DbClient, listId: string): Promise<Map<number, BookRating[]>> {
+  const result = await db.execute({
+    sql: `SELECT r.book_id, r.member_id, r.score, r.updated_at
+      FROM ratings r
+      INNER JOIN books b ON b.id = r.book_id
+      WHERE b.list_id = ?`,
+    args: [listId],
+  });
+  const byBook = new Map<number, BookRating[]>();
+  for (const row of result.rows) {
+    const rating = readRatingRow(row);
+    if (!rating || !row || typeof row !== "object" || !("book_id" in row)) continue;
+    const bookId = row.book_id;
+    const numericBookId = typeof bookId === "bigint" ? Number(bookId) : bookId;
+    if (typeof numericBookId !== "number") continue;
+    const list = byBook.get(numericBookId) ?? [];
+    list.push(rating);
+    byBook.set(numericBookId, list);
+  }
+  return byBook;
+}
+
+function attachMyScore(book: Omit<BookRow, "myScore">, memberId: number | null): BookRow {
+  const myScore =
+    memberId === null
+      ? null
+      : (book.ratings.find((rating) => rating.memberId === memberId)?.score ?? null);
+  return { ...book, myScore };
+}
+
+async function readBookRow(
+  db: DbClient,
+  listId: string,
+  bookId: number,
+  memberId: number | null,
+): Promise<BookRow | null> {
+  const bookRow = await db.execute({
+    sql: "SELECT id, title, created_at FROM books WHERE id = ? AND list_id = ?",
+    args: [bookId, listId],
+  });
+  const base = readBookBase(bookRow.rows[0]);
+  if (!base) return null;
+
+  const ratingsResult = await db.execute({
+    sql: `SELECT member_id, score, updated_at FROM ratings WHERE book_id = ?`,
+    args: [bookId],
+  });
+  const ratings = ratingsResult.rows
+    .map((row) => readRatingRow({ ...row, book_id: bookId }))
+    .filter((row): row is BookRating => row !== null);
+
+  return attachMyScore({ ...base, ratings }, memberId);
 }
 
 async function memberInList(listId: string, memberId: number): Promise<boolean> {
@@ -66,64 +161,20 @@ async function bookInList(listId: string, bookId: number): Promise<boolean> {
 export async function listBooks(listId: string, memberId: number | null): Promise<BookRow[]> {
   const db = await getDb();
   const books = await db.execute({
-    sql: "SELECT id, title FROM books WHERE list_id = ? ORDER BY id ASC",
+    sql: "SELECT id, title, created_at FROM books WHERE list_id = ? ORDER BY id ASC",
     args: [listId],
   });
-
-  if (memberId === null) {
-    return books.rows
-      .map((row) => readBookRow(row, null))
-      .filter((row): row is BookRow => row !== null);
-  }
-
-  const ratings = await db.execute({
-    sql: `SELECT book_id, score FROM ratings
-      WHERE member_id = ? AND book_id IN (
-        SELECT id FROM books WHERE list_id = ?
-      )`,
-    args: [memberId, listId],
-  });
-
-  const scoreByBook = new Map<number, BookScore>();
-  for (const row of ratings.rows) {
-    if (!row || typeof row !== "object" || !("book_id" in row) || !("score" in row)) continue;
-    const bookId = row.book_id;
-    const score = row.score;
-    const numericBookId = typeof bookId === "bigint" ? Number(bookId) : bookId;
-    const numericScore = typeof score === "bigint" ? Number(score) : score;
-    if (typeof numericBookId === "number" && (numericScore === 1 || numericScore === 2 || numericScore === 3)) {
-      scoreByBook.set(numericBookId, numericScore);
-    }
-  }
+  const ratingsByBook = await loadRatingsForList(db, listId);
 
   return books.rows
     .map((row) => {
-      const book = readBookRow(row, null);
-      if (!book) return null;
-      return { ...book, myScore: scoreByBook.get(book.id) ?? null };
+      const base = readBookBase(row);
+      if (!base) return null;
+      const ratings = ratingsByBook.get(base.id) ?? [];
+      return attachMyScore({ ...base, ratings }, memberId);
     })
     .filter((row): row is BookRow => row !== null);
 }
-
-function parseRatingScore(raw: unknown): BookScore | null {
-  if (raw === 1 || raw === 2 || raw === 3) return raw;
-  if (typeof raw === "bigint") {
-    const n = Number(raw);
-    if (n === 1 || n === 2 || n === 3) return n;
-  }
-  if (typeof raw === "number") {
-    if (raw === 1 || raw === 2 || raw === 3) return raw;
-  }
-  return null;
-}
-
-function readTitle(row: unknown): string | null {
-  if (!row || typeof row !== "object" || !("title" in row)) return null;
-  const title = row.title;
-  return typeof title === "string" ? title : null;
-}
-
-type DbClient = Awaited<ReturnType<typeof getDb>>;
 
 async function listMustReadTitles(db: DbClient, listId: string, memberId: number): Promise<string[]> {
   const result = await db.execute({
@@ -237,23 +288,20 @@ export async function addBook(
   const now = new Date().toISOString();
 
   const existing = await db.execute({
-    sql: "SELECT id, title FROM books WHERE list_id = ? AND title_key = ?",
+    sql: "SELECT id, title, created_at FROM books WHERE list_id = ? AND title_key = ?",
     args: [listId, titleKey],
   });
-  const existingBook = readBookRow(existing.rows[0], null);
+  const existingBook = readBookBase(existing.rows[0]);
 
   let bookId: number;
-  let displayTitle: string;
   if (existingBook) {
     bookId = existingBook.id;
-    displayTitle = existingBook.title;
   } else {
     const insert = await db.execute({
       sql: "INSERT INTO books (list_id, title, title_key, created_at) VALUES (?, ?, ?, ?)",
       args: [listId, title, titleKey, now],
     });
     bookId = Number(insert.lastInsertRowid);
-    displayTitle = title;
   }
 
   if (score !== null) {
@@ -261,21 +309,9 @@ export async function addBook(
     if (!rated.ok) return { ok: false, error: rated.error };
   }
 
-  const myScore =
-    score ??
-    (await (async () => {
-      const rated = await db.execute({
-        sql: "SELECT score FROM ratings WHERE book_id = ? AND member_id = ?",
-        args: [bookId, parsedMemberId],
-      });
-      const row = rated.rows[0];
-      if (!row || typeof row !== "object" || !("score" in row)) return null;
-      const s = row.score;
-      const n = typeof s === "bigint" ? Number(s) : s;
-      return n === 1 || n === 2 || n === 3 ? n : null;
-    })());
-
-  return { ok: true, value: { id: bookId, title: displayTitle, myScore } };
+  const book = await readBookRow(db, listId, bookId, parsedMemberId);
+  if (!book) return { ok: false, error: copy.notFoundTitle };
+  return { ok: true, value: book };
 }
 
 export async function setBookRating(
@@ -307,11 +343,7 @@ export async function setBookRating(
   if (!rated.ok) return { ok: false, error: rated.error };
 
   const db = await getDb();
-  const bookRow = await db.execute({
-    sql: "SELECT id, title FROM books WHERE id = ? AND list_id = ?",
-    args: [bookId, listId],
-  });
-  const book = readBookRow(bookRow.rows[0], score);
+  const book = await readBookRow(db, listId, bookId, parsedMemberId);
   if (!book) return { ok: false, error: copy.notFoundTitle };
   return { ok: true, value: book };
 }
@@ -343,11 +375,7 @@ export async function revokeBookRating(
     args: [bookId, parsedMemberId],
   });
 
-  const bookRow = await db.execute({
-    sql: "SELECT id, title FROM books WHERE id = ? AND list_id = ?",
-    args: [bookId, listId],
-  });
-  const book = readBookRow(bookRow.rows[0], null);
+  const book = await readBookRow(db, listId, bookId, parsedMemberId);
   if (!book) return { ok: false, error: copy.notFoundTitle };
   return { ok: true, value: book };
 }
