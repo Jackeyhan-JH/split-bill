@@ -351,3 +351,84 @@ input:focus-visible {
   font-size: 16px;
   pointer-events: none;
 }
+
+.score-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.score-chip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--ink);
+  border-radius: 12px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.score-chip.is-selected {
+  border-width: 2px;
+  font-weight: 700;
+}
+
+.score-chip:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.books-empty {
+  margin-top: 20px;
+}
+
+.book-list {
+  margin: 20px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.book-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  min-height: 44px;
+  margin-bottom: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper);
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.book-row:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.book-title {
+  font-weight: 700;
+}
+
+.book-score {
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.book-rate-name {
+  margin-bottom: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
