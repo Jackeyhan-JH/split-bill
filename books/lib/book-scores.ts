@@ -1,5 +1,7 @@
 import { copy } from "./copy";
 
+export const MUST_READ_MAX = 5;
+
 export type BookScore = 1 | 2 | 3;
 
 export type BookRow = {

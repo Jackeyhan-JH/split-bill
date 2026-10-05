@@ -9,7 +9,12 @@ import {
   writeStoredMemberId,
 } from "../../../lib/identity-storage";
 import { shareListLink } from "../../../lib/share-link";
-import { scoreLabel, type BookRow, type BookScore } from "../../../lib/book-scores";
+import {
+  MUST_READ_MAX,
+  scoreLabel,
+  type BookRow,
+  type BookScore,
+} from "../../../lib/book-scores";
 
 export type Member = { id: number; name: string };
 
@@ -49,6 +54,7 @@ export function BookListView({ listId, listName, initialMembers }: Props) {
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const identityMember = members.find((member) => member.id === identityId) ?? null;
+  const mustReadCount = books.filter((book) => book.myScore === 3).length;
   const showGate = hydrated && identityId === null;
 
   const showToast = useCallback((message: string) => {
@@ -136,6 +142,10 @@ export function BookListView({ listId, listName, initialMembers }: Props) {
     if (submitting.current || identityId === null || activeBookId === null) return;
     submitting.current = true;
     setFieldError("");
+    const previousBooks = books;
+    setBooks((prev) =>
+      prev.map((entry) => (entry.id === activeBookId ? { ...entry, myScore: score } : entry)),
+    );
     try {
       const response = await fetch(`/api/book-lists/${listId}/books/${activeBookId}/ratings`, {
         method: "PUT",
@@ -144,6 +154,7 @@ export function BookListView({ listId, listName, initialMembers }: Props) {
       });
       const data: unknown = await response.json();
       if (!response.ok) {
+        setBooks(previousBooks);
         const message =
           data && typeof data === "object" && "error" in data && typeof data.error === "string"
             ? data.error
@@ -155,10 +166,16 @@ export function BookListView({ listId, listName, initialMembers }: Props) {
         data && typeof data === "object" && "book" in data && data.book && typeof data.book === "object"
           ? (data.book as BookRow)
           : null;
-      if (!book) return;
+      if (!book) {
+        setBooks(previousBooks);
+        return;
+      }
       setBooks((prev) => prev.map((entry) => (entry.id === book.id ? book : entry)));
       closeSheet();
       showToast(copy.saved);
+    } catch {
+      setBooks(previousBooks);
+      setFieldError(copy.invalidScore);
     } finally {
       submitting.current = false;
     }
@@ -168,6 +185,10 @@ export function BookListView({ listId, listName, initialMembers }: Props) {
     if (submitting.current || identityId === null || activeBookId === null) return;
     submitting.current = true;
     setFieldError("");
+    const previousBooks = books;
+    setBooks((prev) =>
+      prev.map((entry) => (entry.id === activeBookId ? { ...entry, myScore: null } : entry)),
+    );
     try {
       const response = await fetch(
         `/api/book-lists/${listId}/books/${activeBookId}/ratings?memberId=${identityId}`,
@@ -175,6 +196,7 @@ export function BookListView({ listId, listName, initialMembers }: Props) {
       );
       const data: unknown = await response.json();
       if (!response.ok) {
+        setBooks(previousBooks);
         const message =
           data && typeof data === "object" && "error" in data && typeof data.error === "string"
             ? data.error
@@ -186,10 +208,16 @@ export function BookListView({ listId, listName, initialMembers }: Props) {
         data && typeof data === "object" && "book" in data && data.book && typeof data.book === "object"
           ? (data.book as BookRow)
           : null;
-      if (!book) return;
+      if (!book) {
+        setBooks(previousBooks);
+        return;
+      }
       setBooks((prev) => prev.map((entry) => (entry.id === book.id ? book : entry)));
       closeSheet();
       showToast(copy.saved);
+    } catch {
+      setBooks(previousBooks);
+      setFieldError(copy.invalidScore);
     } finally {
       submitting.current = false;
     }
@@ -359,6 +387,9 @@ export function BookListView({ listId, listName, initialMembers }: Props) {
         {identityMember ? (
           <div className="identity-bar">
             <p className="kicker">{copy.currentIdentity(identityMember.name)}</p>
+            <p className="must-read-badge" aria-live="polite">
+              {copy.myMustRead(mustReadCount, MUST_READ_MAX)}
+            </p>
             <button type="button" className="chip" onClick={openSwitchIdentity}>
               {copy.switchIdentity}
             </button>

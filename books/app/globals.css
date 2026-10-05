@@ -223,6 +223,13 @@ input:focus-visible {
   margin-bottom: 4px;
 }
 
+.must-read-badge {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--ink-muted, #5c5348);
+}
+
 .not-found {
   display: flex;
   flex: 1;
