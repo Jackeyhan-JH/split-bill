@@ -37,6 +37,34 @@ async function initSchema(db: Client) {
         sql: `CREATE INDEX IF NOT EXISTS idx_members_list
       ON members (list_id, id)`,
       },
+      {
+        sql: `CREATE TABLE IF NOT EXISTS books (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      list_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      title_key TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (list_id) REFERENCES book_lists(id) ON DELETE CASCADE,
+      UNIQUE (list_id, title_key)
+    )`,
+      },
+      {
+        sql: `CREATE TABLE IF NOT EXISTS ratings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      book_id INTEGER NOT NULL,
+      member_id INTEGER NOT NULL,
+      score INTEGER NOT NULL CHECK (score IN (1, 2, 3)),
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE,
+      FOREIGN KEY (member_id) REFERENCES members(id) ON DELETE CASCADE,
+      UNIQUE (book_id, member_id)
+    )`,
+      },
+      {
+        sql: `CREATE INDEX IF NOT EXISTS idx_books_list
+      ON books (list_id, id)`,
+      },
     ],
     "write",
   );

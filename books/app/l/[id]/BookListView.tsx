@@ -9,10 +9,11 @@ import {
   writeStoredMemberId,
 } from "../../../lib/identity-storage";
 import { shareListLink } from "../../../lib/share-link";
+import { scoreLabel, type BookRow, type BookScore } from "../../../lib/book-scores";
 
 export type Member = { id: number; name: string };
 
-type MemberSheet = "add" | "rename" | "switch" | null;
+type MemberSheet = "add" | "rename" | "switch" | "rate" | null;
 
 type Props = {
   listId: string;
@@ -39,6 +40,10 @@ export function BookListView({ listId, listName, initialMembers }: Props) {
   const [activeMemberId, setActiveMemberId] = useState<number | null>(null);
   const [nameInput, setNameInput] = useState("");
   const [fieldError, setFieldError] = useState("");
+  const [books, setBooks] = useState<BookRow[]>([]);
+  const [bookTitleInput, setBookTitleInput] = useState("");
+  const [addScore, setAddScore] = useState<BookScore | null>(null);
+  const [activeBookId, setActiveBookId] = useState<number | null>(null);
   const [toast, setToast] = useState("");
   const submitting = useRef(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -57,6 +62,138 @@ export function BookListView({ listId, listName, initialMembers }: Props) {
       if (toastTimer.current) clearTimeout(toastTimer.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    let active = true;
+    const query = identityId !== null ? `?memberId=${identityId}` : "";
+    void fetch(`/api/book-lists/${listId}/books${query}`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data: unknown) => {
+        if (!active || !data || typeof data !== "object" || !("books" in data) || !Array.isArray(data.books)) {
+          return;
+        }
+        setBooks(data.books as BookRow[]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [hydrated, identityId, listId]);
+
+  const activeBook = books.find((book) => book.id === activeBookId) ?? null;
+
+  function openRateBook(book: BookRow) {
+    if (identityId === null) return;
+    setMemberSheet("rate");
+    setActiveBookId(book.id);
+    setFieldError("");
+  }
+
+  async function submitAddBook() {
+    if (submitting.current || identityId === null) return;
+    submitting.current = true;
+    setFieldError("");
+    try {
+      const response = await fetch(`/api/book-lists/${listId}/books`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: bookTitleInput,
+          memberId: identityId,
+          ...(addScore !== null ? { score: addScore } : {}),
+        }),
+      });
+      const data: unknown = await response.json();
+      if (!response.ok) {
+        const message =
+          data && typeof data === "object" && "error" in data && typeof data.error === "string"
+            ? data.error
+            : copy.bookTitleRequired;
+        setFieldError(message);
+        return;
+      }
+      const book =
+        data && typeof data === "object" && "book" in data && data.book && typeof data.book === "object"
+          ? (data.book as BookRow)
+          : null;
+      if (!book) return;
+      setBooks((prev) => {
+        const existing = prev.find((entry) => entry.id === book.id);
+        if (existing) {
+          return prev.map((entry) => (entry.id === book.id ? book : entry));
+        }
+        return [...prev, book];
+      });
+      setBookTitleInput("");
+      setAddScore(null);
+      showToast(copy.saved);
+    } finally {
+      submitting.current = false;
+    }
+  }
+
+  async function submitRating(score: BookScore) {
+    if (submitting.current || identityId === null || activeBookId === null) return;
+    submitting.current = true;
+    setFieldError("");
+    try {
+      const response = await fetch(`/api/book-lists/${listId}/books/${activeBookId}/ratings`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ memberId: identityId, score }),
+      });
+      const data: unknown = await response.json();
+      if (!response.ok) {
+        const message =
+          data && typeof data === "object" && "error" in data && typeof data.error === "string"
+            ? data.error
+            : copy.invalidScore;
+        setFieldError(message);
+        return;
+      }
+      const book =
+        data && typeof data === "object" && "book" in data && data.book && typeof data.book === "object"
+          ? (data.book as BookRow)
+          : null;
+      if (!book) return;
+      setBooks((prev) => prev.map((entry) => (entry.id === book.id ? book : entry)));
+      closeSheet();
+      showToast(copy.saved);
+    } finally {
+      submitting.current = false;
+    }
+  }
+
+  async function submitRevokeRating() {
+    if (submitting.current || identityId === null || activeBookId === null) return;
+    submitting.current = true;
+    setFieldError("");
+    try {
+      const response = await fetch(
+        `/api/book-lists/${listId}/books/${activeBookId}/ratings?memberId=${identityId}`,
+        { method: "DELETE" },
+      );
+      const data: unknown = await response.json();
+      if (!response.ok) {
+        const message =
+          data && typeof data === "object" && "error" in data && typeof data.error === "string"
+            ? data.error
+            : copy.invalidScore;
+        setFieldError(message);
+        return;
+      }
+      const book =
+        data && typeof data === "object" && "book" in data && data.book && typeof data.book === "object"
+          ? (data.book as BookRow)
+          : null;
+      if (!book) return;
+      setBooks((prev) => prev.map((entry) => (entry.id === book.id ? book : entry)));
+      closeSheet();
+      showToast(copy.saved);
+    } finally {
+      submitting.current = false;
+    }
+  }
 
   if (!hydrated) {
     return (
@@ -106,6 +243,7 @@ export function BookListView({ listId, listName, initialMembers }: Props) {
   function closeSheet() {
     setMemberSheet(null);
     setActiveMemberId(null);
+    setActiveBookId(null);
     setNameInput("");
     setFieldError("");
   }
@@ -256,8 +394,66 @@ export function BookListView({ listId, listName, initialMembers }: Props) {
           </button>
         </section>
 
-        <section>
-          <p className="empty">{copy.listPlaceholder}</p>
+        <section aria-labelledby="books-heading">
+          <h2 id="books-heading">{copy.books}</h2>
+          <label htmlFor="book-title">{copy.bookTitleLabel}</label>
+          <input
+            id="book-title"
+            value={bookTitleInput}
+            onChange={(event) => setBookTitleInput(event.target.value)}
+            placeholder={copy.bookTitlePlaceholder}
+            autoComplete="off"
+            disabled={identityId === null}
+          />
+          <div className="score-picker" role="group" aria-label={copy.rateBook}>
+            {([3, 2, 1] as const).map((score) => (
+              <button
+                key={score}
+                type="button"
+                className={`score-chip${addScore === score ? " is-selected" : ""}`}
+                aria-pressed={addScore === score}
+                disabled={identityId === null}
+                onClick={() => setAddScore((prev) => (prev === score ? null : score))}
+              >
+                {score} · {scoreLabel(score)}
+              </button>
+            ))}
+          </div>
+          {fieldError && memberSheet === null && !showGate ? (
+            <p className="alert" role="alert">
+              {fieldError}
+            </p>
+          ) : null}
+          <button
+            type="button"
+            className="primary"
+            disabled={identityId === null}
+            onClick={() => void submitAddBook()}
+          >
+            {copy.addBook}
+          </button>
+
+          {books.length === 0 ? (
+            <p className="empty books-empty">{copy.noBooks}</p>
+          ) : (
+            <ul className="book-list">
+              {books.map((book) => (
+                <li key={book.id}>
+                  <button
+                    type="button"
+                    className="book-row"
+                    onClick={() => openRateBook(book)}
+                    disabled={identityId === null}
+                  >
+                    <span className="book-title">{book.title}</span>
+                    <span className="book-score">
+                      {book.myScore !== null ? copy.myScore(scoreLabel(book.myScore)) : copy.noScore}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
       </main>
 
@@ -365,6 +561,40 @@ export function BookListView({ listId, listName, initialMembers }: Props) {
             <button type="button" className="primary" onClick={() => void submitRename()}>
               {copy.save}
             </button>
+            <button type="button" className="ghost sheet-cancel" onClick={closeSheet}>
+              {copy.cancel}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {memberSheet === "rate" && activeBook ? (
+        <div className="sheet-root" role="dialog" aria-modal="true" aria-labelledby="rate-book-title">
+          <div className="sheet">
+            <h2 id="rate-book-title">{copy.rateBook}</h2>
+            <p className="detail book-rate-name">{activeBook.title}</p>
+            <div className="score-picker" role="group" aria-label={copy.rateBook}>
+              {([3, 2, 1] as const).map((score) => (
+                <button
+                  key={score}
+                  type="button"
+                  className={`score-chip${activeBook.myScore === score ? " is-selected" : ""}`}
+                  onClick={() => void submitRating(score)}
+                >
+                  {score} · {scoreLabel(score)}
+                </button>
+              ))}
+            </div>
+            {fieldError ? (
+              <p className="alert" role="alert">
+                {fieldError}
+              </p>
+            ) : null}
+            {activeBook.myScore !== null ? (
+              <button type="button" className="ghost sheet-cancel" onClick={() => void submitRevokeRating()}>
+                {copy.revokeScore}
+              </button>
+            ) : null}
             <button type="button" className="ghost sheet-cancel" onClick={closeSheet}>
               {copy.cancel}
             </button>
