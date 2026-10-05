@@ -26,7 +26,7 @@ import {
 
 export type Member = { id: number; name: string };
 
-type MemberSheet = "add" | "rename" | "switch" | "rate" | null;
+type MemberSheet = "add" | "rename" | "switch" | "rate" | "delete" | null;
 type ActiveShelf = "collective" | number;
 
 type Props = {
@@ -107,6 +107,13 @@ export function BookListView({ listId, listName, initialMembers }: Props) {
   function openRateBook(book: BookRow) {
     if (!canEditBookOnShelf()) return;
     setMemberSheet("rate");
+    setActiveBookId(book.id);
+    setFieldError("");
+  }
+
+  function openDeleteBook(book: BookRow) {
+    if (identityId === null || activeShelf !== "collective") return;
+    setMemberSheet("delete");
     setActiveBookId(book.id);
     setFieldError("");
   }
@@ -206,6 +213,35 @@ export function BookListView({ listId, listName, initialMembers }: Props) {
     } catch {
       setBooks(previousBooks);
       setFieldError(copy.invalidScore);
+    } finally {
+      submitting.current = false;
+    }
+  }
+
+  async function submitDeleteBook() {
+    if (submitting.current || identityId === null || activeBookId === null) return;
+    submitting.current = true;
+    setFieldError("");
+    const deletedId = activeBookId;
+    try {
+      const response = await fetch(
+        `/api/book-lists/${listId}/books/${deletedId}?memberId=${identityId}`,
+        { method: "DELETE" },
+      );
+      const data: unknown = await response.json();
+      if (!response.ok) {
+        const message =
+          data && typeof data === "object" && "error" in data && typeof data.error === "string"
+            ? data.error
+            : copy.notFoundTitle;
+        setFieldError(message);
+        return;
+      }
+      setBooks((prev) => prev.filter((entry) => entry.id !== deletedId));
+      closeSheet();
+      showToast(copy.saved);
+    } catch {
+      setFieldError(copy.notFoundTitle);
     } finally {
       submitting.current = false;
     }
@@ -532,7 +568,7 @@ export function BookListView({ listId, listName, initialMembers }: Props) {
                     const tierLines = collectiveTierLines(book, members);
                     const editable = canEditBookOnShelf();
                     return (
-                      <li key={book.id}>
+                      <li key={book.id} className="book-list-row">
                         <button
                           type="button"
                           className="book-row"
@@ -551,6 +587,16 @@ export function BookListView({ listId, listName, initialMembers }: Props) {
                               : copy.noScore}
                           </span>
                         </button>
+                        {identityId !== null ? (
+                          <button
+                            type="button"
+                            className="ghost book-delete-btn"
+                            aria-label={`${copy.deleteBook}：${book.title}`}
+                            onClick={() => openDeleteBook(book)}
+                          >
+                            {copy.deleteBook}
+                          </button>
+                        ) : null}
                       </li>
                     );
                   })}
@@ -759,6 +805,26 @@ export function BookListView({ listId, listName, initialMembers }: Props) {
                 {copy.revokeScore}
               </button>
             ) : null}
+            <button type="button" className="ghost sheet-cancel" onClick={closeSheet}>
+              {copy.cancel}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {memberSheet === "delete" && activeBook ? (
+        <div className="sheet-root" role="dialog" aria-modal="true" aria-labelledby="delete-book-title">
+          <div className="sheet">
+            <h2 id="delete-book-title">{copy.deleteBookDialogTitle}</h2>
+            <p className="detail">{copy.deleteBookConfirm(activeBook.title, activeBook.ratings.length)}</p>
+            {fieldError ? (
+              <p className="alert" role="alert">
+                {fieldError}
+              </p>
+            ) : null}
+            <button type="button" className="primary danger" onClick={() => void submitDeleteBook()}>
+              {copy.confirmDelete}
+            </button>
             <button type="button" className="ghost sheet-cancel" onClick={closeSheet}>
               {copy.cancel}
             </button>

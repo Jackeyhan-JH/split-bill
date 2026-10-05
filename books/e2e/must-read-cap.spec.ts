@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { collectiveBookRow } from "./helpers";
 
 const FIVE = ["三体", "活着", "百年孤独", "人类简史", "红楼梦"] as const;
 
@@ -26,7 +27,7 @@ async function addBookWithScore(page: Page, title: string, score?: 1 | 2 | 3) {
     await booksSection.getByRole("button", { name: label, exact: true }).click();
   }
   await booksSection.getByRole("button", { name: "加书", exact: true }).click();
-  const row = page.getByRole("button", { name: new RegExp(title) });
+  const row = collectiveBookRow(page, title);
   await expect(row).toBeVisible();
   if (score === 3) {
     await expect(row).toContainText("必读");
@@ -57,7 +58,7 @@ test("AC1 block 6th must-read with title list", async ({ page }) => {
   }
   await addBookWithScore(page, "围城", 2);
 
-  await page.getByRole("button", { name: /围城/ }).click();
+  await collectiveBookRow(page, "围城").click();
   await page.getByRole("dialog").getByRole("button", { name: "3 · 必读", exact: true }).click();
 
   const alert = page.getByRole("dialog").getByRole("alert");
@@ -65,7 +66,7 @@ test("AC1 block 6th must-read with title list", async ({ page }) => {
   for (const title of FIVE) {
     await expect(alert).toContainText(title);
   }
-  await expect(page.getByRole("button", { name: /围城/ })).toContainText("推荐阅读");
+  await expect(collectiveBookRow(page, "围城")).toContainText("推荐阅读");
 });
 
 test("AC2 demote then add 6th must-read", async ({ page }) => {
@@ -77,15 +78,15 @@ test("AC2 demote then add 6th must-read", async ({ page }) => {
   }
   await addBookWithScore(page, "围城", 2);
 
-  await page.getByRole("button", { name: /红楼梦/ }).click();
+  await collectiveBookRow(page, "红楼梦").click();
   await page.getByRole("dialog").getByRole("button", { name: "2 · 推荐阅读", exact: true }).click();
   await expect(page.getByText("我的必读 4/5")).toBeVisible({ timeout: 10000 });
 
-  await page.getByRole("button", { name: /围城/ }).click();
+  await collectiveBookRow(page, "围城").click();
   await page.getByRole("dialog").getByRole("button", { name: "3 · 必读", exact: true }).click();
   await expect(page.getByText("我的必读 5/5")).toBeVisible();
-  await expect(page.getByRole("button", { name: /围城/ })).toContainText("必读");
-  await expect(page.getByRole("button", { name: /红楼梦/ })).toContainText("推荐阅读");
+  await expect(collectiveBookRow(page, "围城")).toContainText("必读");
+  await expect(collectiveBookRow(page, "红楼梦")).toContainText("推荐阅读");
 });
 
 test("AC3 demote at cap is not blocked", async ({ page }) => {
@@ -96,7 +97,7 @@ test("AC3 demote at cap is not blocked", async ({ page }) => {
     await addBookWithScore(page, title, 3);
   }
 
-  await page.getByRole("button", { name: /三体/ }).click();
+  await collectiveBookRow(page, "三体").click();
   await page.getByRole("dialog").getByRole("button", { name: "2 · 推荐阅读", exact: true }).click();
   await expect(page.getByText("我的必读 4/5")).toBeVisible({ timeout: 10000 });
   await expect(page.getByRole("dialog")).toBeHidden();

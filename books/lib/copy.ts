@@ -55,4 +55,9 @@ export const copy = {
   myMustRead: (count: number, max: number) => `我的必读 ${count}/${max}`,
   mustReadCapExceeded: (titles: string[]) =>
     `最多 5 本必读。请先下调或撤销以下书目：${titles.join("、")}`,
+  deleteBook: "删书",
+  deleteBookDialogTitle: "删除此书",
+  deleteBookConfirm: (title: string, raterCount: number) =>
+    `《${title}》已有 ${raterCount} 人打分，删除后这些分数一起清掉`,
+  confirmDelete: "确认删除",
 } as const;

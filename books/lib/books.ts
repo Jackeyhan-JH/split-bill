@@ -379,3 +379,32 @@ export async function revokeBookRating(
   if (!book) return { ok: false, error: copy.notFoundTitle };
   return { ok: true, value: book };
 }
+
+export async function deleteBook(
+  listId: string,
+  bookId: number,
+  memberId: unknown,
+): Promise<BooksResult<void>> {
+  if (!(await getBookList(listId))) return { ok: false, error: copy.notFoundTitle };
+
+  const parsedMemberId =
+    typeof memberId === "number"
+      ? memberId
+      : typeof memberId === "string"
+        ? Number.parseInt(memberId, 10)
+        : NaN;
+  if (!Number.isFinite(parsedMemberId) || parsedMemberId <= 0) {
+    return { ok: false, error: copy.memberRequired };
+  }
+  if (!(await memberInList(listId, parsedMemberId))) {
+    return { ok: false, error: copy.memberRequired };
+  }
+  if (!(await bookInList(listId, bookId))) return { ok: false, error: copy.notFoundTitle };
+
+  const db = await getDb();
+  await db.execute({
+    sql: "DELETE FROM books WHERE id = ? AND list_id = ?",
+    args: [bookId, listId],
+  });
+  return { ok: true, value: undefined };
+}

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { collectiveBookRow } from "./helpers";
 
 async function createList(page: Page, name: string) {
   await page.goto("/");
@@ -48,15 +49,13 @@ async function addBook(page: Page, title: string, score?: 1 | 2 | 3) {
   }
   await section.getByRole("button", { name: "加书", exact: true }).click();
   await expect(page.getByRole("status")).toContainText("已保存");
-  await expect(
-    section.locator(".book-list").getByRole("button", { name: new RegExp(title) }),
-  ).toBeVisible();
+  await expect(collectiveBookRow(section, title)).toBeVisible();
 }
 
 async function rateOnCollective(page: Page, title: string, score: 1 | 2 | 3) {
   await page.getByRole("tab", { name: "集体" }).click();
   const section = page.locator("section[aria-labelledby='books-heading']");
-  await section.locator(".book-list").getByRole("button", { name: new RegExp(title) }).click();
+  await collectiveBookRow(section, title).click();
   const label =
     score === 3 ? "3 · 必读" : score === 2 ? "2 · 推荐阅读" : "1 · 无聊再读";
   await page.getByRole("dialog").getByRole("button", { name: label, exact: true }).click();
@@ -107,8 +106,9 @@ test("AC3 collective sort and tier display", async ({ page }) => {
   await page.getByRole("tab", { name: "集体" }).click();
   const titles = page.locator(".book-list .book-title");
   await expect(titles).toHaveText(["三体", "活着", "围城", "红楼梦", "聊斋"]);
-  await expect(page.getByRole("button", { name: /三体/ })).toContainText("必读(3)：小红、Jackey");
-  await expect(page.getByRole("button", { name: /三体/ })).toContainText("推荐阅读(2)：阿明");
+  const santiRow = collectiveBookRow(page, "三体");
+  await expect(santiRow).toContainText("必读(3)：小红、Jackey");
+  await expect(santiRow).toContainText("推荐阅读(2)：阿明");
 });
 
 test("AC4 personal shelf groups for 小红", async ({ page }) => {
