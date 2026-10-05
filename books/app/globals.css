@@ -439,3 +439,71 @@ input:focus-visible {
   font-weight: 600;
   color: var(--text);
 }
+
+.shelf-tabs {
+  margin-top: 16px;
+  margin-bottom: 4px;
+}
+
+.shelf-tabs-scroll {
+  display: flex;
+  gap: 8px;
+  padding-bottom: 4px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+.shelf-tab {
+  flex: 0 0 auto;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.shelf-tab.is-active {
+  border-color: var(--ink);
+  border-width: 2px;
+  font-weight: 700;
+}
+
+.shelf-tab:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.book-tier {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.personal-shelf {
+  margin-top: 8px;
+}
+
+.shelf-group {
+  margin-top: 16px;
+}
+
+.shelf-group h3 {
+  margin: 0 0 8px;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.shelf-group .empty {
+  margin-bottom: 8px;
+  font-size: 15px;
+}
+
+.book-row.is-readonly {
+  cursor: default;
+}

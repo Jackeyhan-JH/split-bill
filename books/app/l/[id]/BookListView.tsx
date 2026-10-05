@@ -15,10 +15,19 @@ import {
   type BookRow,
   type BookScore,
 } from "../../../lib/book-scores";
+import {
+  booksRatedByMember,
+  collectiveTierLines,
+  mustReadCountForMember,
+  ratingForMember,
+  sortCollectiveBooks,
+  sortPersonalGroup,
+} from "../../../lib/shelf";
 
 export type Member = { id: number; name: string };
 
 type MemberSheet = "add" | "rename" | "switch" | "rate" | null;
+type ActiveShelf = "collective" | number;
 
 type Props = {
   listId: string;
@@ -46,6 +55,7 @@ export function BookListView({ listId, listName, initialMembers }: Props) {
   const [nameInput, setNameInput] = useState("");
   const [fieldError, setFieldError] = useState("");
   const [books, setBooks] = useState<BookRow[]>([]);
+  const [activeShelf, setActiveShelf] = useState<ActiveShelf>("collective");
   const [bookTitleInput, setBookTitleInput] = useState("");
   const [addScore, setAddScore] = useState<BookScore | null>(null);
   const [activeBookId, setActiveBookId] = useState<number | null>(null);
@@ -88,12 +98,32 @@ export function BookListView({ listId, listName, initialMembers }: Props) {
 
   const activeBook = books.find((book) => book.id === activeBookId) ?? null;
 
+  function canEditBookOnShelf(): boolean {
+    if (identityId === null) return false;
+    if (activeShelf === "collective") return true;
+    return activeShelf === identityId;
+  }
+
   function openRateBook(book: BookRow) {
-    if (identityId === null) return;
+    if (!canEditBookOnShelf()) return;
     setMemberSheet("rate");
     setActiveBookId(book.id);
     setFieldError("");
   }
+
+  const collectiveBooks = sortCollectiveBooks(books);
+  const shelfMember =
+    typeof activeShelf === "number"
+      ? (members.find((member) => member.id === activeShelf) ?? null)
+      : null;
+  const personalRated =
+    shelfMember !== null ? booksRatedByMember(books, shelfMember.id) : [];
+  const shelfTitle =
+    activeShelf === "collective"
+      ? copy.collectiveShelf
+      : shelfMember
+        ? copy.personalShelf(shelfMember.name)
+        : copy.collectiveShelf;
 
   async function submitAddBook() {
     if (submitting.current || identityId === null) return;
@@ -425,66 +455,169 @@ export function BookListView({ listId, listName, initialMembers }: Props) {
           </button>
         </section>
 
-        <section aria-labelledby="books-heading">
-          <h2 id="books-heading">{copy.books}</h2>
-          <label htmlFor="book-title">{copy.bookTitleLabel}</label>
-          <input
-            id="book-title"
-            value={bookTitleInput}
-            onChange={(event) => setBookTitleInput(event.target.value)}
-            placeholder={copy.bookTitlePlaceholder}
-            autoComplete="off"
-            disabled={identityId === null}
-          />
-          <div className="score-picker" role="group" aria-label={copy.rateBook}>
-            {([3, 2, 1] as const).map((score) => (
+        <nav className="shelf-tabs" aria-label={copy.shelfTabsLabel} role="tablist">
+          <div className="shelf-tabs-scroll">
+            <button
+              type="button"
+              role="tab"
+              className={`shelf-tab${activeShelf === "collective" ? " is-active" : ""}`}
+              aria-selected={activeShelf === "collective"}
+              onClick={() => setActiveShelf("collective")}
+            >
+              {copy.collectiveTab}
+            </button>
+            {members.map((member) => (
               <button
-                key={score}
+                key={member.id}
                 type="button"
-                className={`score-chip${addScore === score ? " is-selected" : ""}`}
-                aria-pressed={addScore === score}
-                disabled={identityId === null}
-                onClick={() => setAddScore((prev) => (prev === score ? null : score))}
+                role="tab"
+                className={`shelf-tab${activeShelf === member.id ? " is-active" : ""}`}
+                aria-selected={activeShelf === member.id}
+                onClick={() => setActiveShelf(member.id)}
               >
-                {score} · {scoreLabel(score)}
+                {member.name}
+                {member.id === identityId ? copy.tabMeSuffix : ""}
               </button>
             ))}
           </div>
-          {fieldError && memberSheet === null && !showGate ? (
-            <p className="alert" role="alert">
-              {fieldError}
-            </p>
-          ) : null}
-          <button
-            type="button"
-            className="primary"
-            disabled={identityId === null}
-            onClick={() => void submitAddBook()}
-          >
-            {copy.addBook}
-          </button>
+        </nav>
 
-          {books.length === 0 ? (
-            <p className="empty books-empty">{copy.noBooks}</p>
-          ) : (
-            <ul className="book-list">
-              {books.map((book) => (
-                <li key={book.id}>
+        <section aria-labelledby="books-heading">
+          <h2 id="books-heading">{shelfTitle}</h2>
+
+          {activeShelf === "collective" ? (
+            <>
+              <label htmlFor="book-title">{copy.bookTitleLabel}</label>
+              <input
+                id="book-title"
+                value={bookTitleInput}
+                onChange={(event) => setBookTitleInput(event.target.value)}
+                placeholder={copy.bookTitlePlaceholder}
+                autoComplete="off"
+                disabled={identityId === null}
+              />
+              <div className="score-picker" role="group" aria-label={copy.rateBook}>
+                {([3, 2, 1] as const).map((score) => (
                   <button
+                    key={score}
                     type="button"
-                    className="book-row"
-                    onClick={() => openRateBook(book)}
+                    className={`score-chip${addScore === score ? " is-selected" : ""}`}
+                    aria-pressed={addScore === score}
                     disabled={identityId === null}
+                    onClick={() => setAddScore((prev) => (prev === score ? null : score))}
                   >
-                    <span className="book-title">{book.title}</span>
-                    <span className="book-score">
-                      {book.myScore !== null ? copy.myScore(scoreLabel(book.myScore)) : copy.noScore}
-                    </span>
+                    {score} · {scoreLabel(score)}
                   </button>
-                </li>
-              ))}
-            </ul>
-          )}
+                ))}
+              </div>
+              {fieldError && memberSheet === null && !showGate ? (
+                <p className="alert" role="alert">
+                  {fieldError}
+                </p>
+              ) : null}
+              <button
+                type="button"
+                className="primary"
+                disabled={identityId === null}
+                onClick={() => void submitAddBook()}
+              >
+                {copy.addBook}
+              </button>
+
+              {books.length === 0 ? (
+                <p className="empty books-empty">{copy.noBooks}</p>
+              ) : (
+                <ul className="book-list">
+                  {collectiveBooks.map((book) => {
+                    const tierLines = collectiveTierLines(book, members);
+                    const editable = canEditBookOnShelf();
+                    return (
+                      <li key={book.id}>
+                        <button
+                          type="button"
+                          className="book-row"
+                          onClick={() => openRateBook(book)}
+                          disabled={!editable}
+                        >
+                          <span className="book-title">{book.title}</span>
+                          {tierLines.map((line) => (
+                            <span key={line} className="book-tier">
+                              {line}
+                            </span>
+                          ))}
+                          <span className="book-score">
+                            {book.myScore !== null
+                              ? copy.myScore(scoreLabel(book.myScore))
+                              : copy.noScore}
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </>
+          ) : shelfMember ? (
+            personalRated.length === 0 ? (
+              <p className="empty books-empty">{copy.memberNoRatings(shelfMember.name)}</p>
+            ) : (
+              <div className="personal-shelf">
+                {([3, 2, 1] as const).map((score) => {
+                  const groupBooks = sortPersonalGroup(books, shelfMember.id, score);
+                  const groupTitle =
+                    score === 3 && shelfMember.id === identityId
+                      ? copy.mustReadGroup(
+                          mustReadCountForMember(books, shelfMember.id),
+                          MUST_READ_MAX,
+                        )
+                      : scoreLabel(score);
+                  return (
+                    <section
+                      key={score}
+                      id={`group-${score}`}
+                      className="shelf-group"
+                      aria-labelledby={`group-${score}-title`}
+                    >
+                      <h3 id={`group-${score}-title`}>{groupTitle}</h3>
+                      {groupBooks.length === 0 ? (
+                        <p className="empty">{copy.shelfGroupEmpty}</p>
+                      ) : (
+                        <ul className="book-list">
+                          {groupBooks.map((book) => {
+                            const rating = ratingForMember(book, shelfMember.id);
+                            const editable = canEditBookOnShelf();
+                            const scoreText =
+                              rating !== null ? scoreLabel(rating.score) : copy.noScore;
+                            const rowBody = (
+                              <>
+                                <span className="book-title">{book.title}</span>
+                                <span className="book-score">{scoreText}</span>
+                              </>
+                            );
+                            return (
+                              <li key={book.id}>
+                                {editable ? (
+                                  <button
+                                    type="button"
+                                    className="book-row"
+                                    onClick={() => openRateBook(book)}
+                                  >
+                                    {rowBody}
+                                  </button>
+                                ) : (
+                                  <div className="book-row is-readonly">{rowBody}</div>
+                                )}
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+                    </section>
+                  );
+                })}
+              </div>
+            )
+          ) : null}
         </section>
       </main>
 
