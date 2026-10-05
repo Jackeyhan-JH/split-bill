@@ -2,6 +2,7 @@ import { copy } from "./copy";
 import { getDb } from "./db";
 import { getBookList } from "./book-lists";
 import {
+  MUST_READ_MAX,
   normalizeTitleKey,
   type BookRow,
   type BookScore,
@@ -14,7 +15,8 @@ type BooksError =
   | typeof copy.notFoundTitle
   | typeof copy.bookTitleRequired
   | typeof copy.memberRequired
-  | typeof copy.invalidScore;
+  | typeof copy.invalidScore
+  | string;
 
 export type BooksResult<T> = { ok: true; value: T } | { ok: false; error: BooksError };
 
@@ -103,8 +105,43 @@ export async function listBooks(listId: string, memberId: number | null): Promis
     .filter((row): row is BookRow => row !== null);
 }
 
-async function upsertRating(bookId: number, memberId: number, score: BookScore): Promise<void> {
-  const db = await getDb();
+function parseRatingScore(raw: unknown): BookScore | null {
+  if (raw === 1 || raw === 2 || raw === 3) return raw;
+  if (typeof raw === "bigint") {
+    const n = Number(raw);
+    if (n === 1 || n === 2 || n === 3) return n;
+  }
+  if (typeof raw === "number") {
+    if (raw === 1 || raw === 2 || raw === 3) return raw;
+  }
+  return null;
+}
+
+function readTitle(row: unknown): string | null {
+  if (!row || typeof row !== "object" || !("title" in row)) return null;
+  const title = row.title;
+  return typeof title === "string" ? title : null;
+}
+
+type DbClient = Awaited<ReturnType<typeof getDb>>;
+
+async function listMustReadTitles(db: DbClient, listId: string, memberId: number): Promise<string[]> {
+  const result = await db.execute({
+    sql: `SELECT b.title FROM ratings r
+      INNER JOIN books b ON b.id = r.book_id
+      WHERE r.member_id = ? AND r.score = 3 AND b.list_id = ?
+      ORDER BY b.id ASC`,
+    args: [memberId, listId],
+  });
+  return result.rows.map(readTitle).filter((title): title is string => title !== null);
+}
+
+async function upsertRatingInTx(
+  db: DbClient,
+  bookId: number,
+  memberId: number,
+  score: BookScore,
+): Promise<void> {
   const now = new Date().toISOString();
   await db.execute({
     sql: `INSERT INTO ratings (book_id, member_id, score, created_at, updated_at)
@@ -113,6 +150,55 @@ async function upsertRating(bookId: number, memberId: number, score: BookScore):
         score = excluded.score,
         updated_at = excluded.updated_at`,
     args: [bookId, memberId, score, now, now],
+  });
+}
+
+let ratingCapQueue: Promise<unknown> = Promise.resolve();
+
+function withRatingCapLock<T>(work: () => Promise<T>): Promise<T> {
+  const next = ratingCapQueue.then(work, work);
+  ratingCapQueue = next.then(
+    () => undefined,
+    () => undefined,
+  );
+  return next;
+}
+
+async function upsertRatingWithCap(
+  listId: string,
+  bookId: number,
+  memberId: number,
+  score: BookScore,
+): Promise<BooksResult<void>> {
+  return withRatingCapLock(async () => {
+    const db = await getDb();
+    await db.execute("BEGIN IMMEDIATE");
+    try {
+      const current = await db.execute({
+        sql: "SELECT score FROM ratings WHERE book_id = ? AND member_id = ?",
+        args: [bookId, memberId],
+      });
+      const currentScore = current.rows[0] ? parseRatingScore(current.rows[0].score) : null;
+
+      if (score === 3 && currentScore !== 3) {
+        const titles = await listMustReadTitles(db, listId, memberId);
+        if (titles.length >= MUST_READ_MAX) {
+          await db.execute("ROLLBACK");
+          return { ok: false, error: copy.mustReadCapExceeded(titles) };
+        }
+      }
+
+      await upsertRatingInTx(db, bookId, memberId, score);
+      await db.execute("COMMIT");
+      return { ok: true, value: undefined };
+    } catch (error) {
+      try {
+        await db.execute("ROLLBACK");
+      } catch {
+        /* ignore rollback failure */
+      }
+      throw error;
+    }
   });
 }
 
@@ -171,7 +257,8 @@ export async function addBook(
   }
 
   if (score !== null) {
-    await upsertRating(bookId, parsedMemberId, score);
+    const rated = await upsertRatingWithCap(listId, bookId, parsedMemberId, score);
+    if (!rated.ok) return { ok: false, error: rated.error };
   }
 
   const myScore =
@@ -216,7 +303,8 @@ export async function setBookRating(
   const score = parseScore(rawScore);
   if (score === null) return { ok: false, error: copy.invalidScore };
 
-  await upsertRating(bookId, parsedMemberId, score);
+  const rated = await upsertRatingWithCap(listId, bookId, parsedMemberId, score);
+  if (!rated.ok) return { ok: false, error: rated.error };
 
   const db = await getDb();
   const bookRow = await db.execute({

@@ -44,4 +44,7 @@ export const copy = {
   rateBook: "给书打分",
   revokeScore: "撤销评分",
   noBooks: "还没有书，先加一本",
+  myMustRead: (count: number, max: number) => `我的必读 ${count}/${max}`,
+  mustReadCapExceeded: (titles: string[]) =>
+    `最多 5 本必读。请先下调或撤销以下书目：${titles.join("、")}`,
 } as const;
