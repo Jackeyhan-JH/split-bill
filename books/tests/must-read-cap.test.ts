@@ -99,7 +99,7 @@ describe("must-read cap (5 per member)", () => {
     const { book: weiBook } = (await weiRes.json()) as { book: { id: number } };
 
     const listedBefore = (await (await listBooks(id, jackey)).json()) as {
-      books: { title: string; myScore: number | null }[];
+      books: { id: number; title: string; myScore: number | null }[];
     };
     const honglou = listedBefore.books.find((book) => book.title === "红楼梦");
     expect(honglou).toBeDefined();
