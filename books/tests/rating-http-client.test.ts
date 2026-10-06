@@ -8,9 +8,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import * as dbModule from "@/lib/db";
-import { addBook, setBookRating } from "@/lib/books";
-import { copy } from "@/lib/copy";
+import { addBook, setBookRating } from "../lib/books";
+import { copy } from "../lib/copy";
+import * as dbModule from "../lib/db";
 import { POST as createList } from "../app/api/book-lists/route";
 import { POST as addMember } from "../app/api/book-lists/[id]/members/route";
 
