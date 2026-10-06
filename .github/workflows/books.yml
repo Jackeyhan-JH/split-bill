@@ -35,8 +35,9 @@ jobs:
       - name: Start sqld for HTTP libsql tests
         run: |
           sqld --db-path /tmp/books-ci.sqld --http-listen-addr 127.0.0.1:18080 &
-          for i in $(seq 1 30); do
-            if curl -sf http://127.0.0.1:18080/ >/dev/null 2>&1; then
+          for i in $(seq 1 60); do
+            if node --input-type=module -e "import { createClient } from '@libsql/client'; await createClient({ url: 'http://127.0.0.1:18080' }).execute('SELECT 1');" 2>/dev/null; then
+              echo "sqld ready"
               exit 0
             fi
             sleep 1
