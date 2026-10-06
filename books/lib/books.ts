@@ -85,6 +85,7 @@ function readTitle(row: unknown): string | null {
 }
 
 type DbClient = Awaited<ReturnType<typeof getDb>>;
+type DbExecutor = Pick<DbClient, "execute">;
 
 async function loadRatingsForList(db: DbClient, listId: string): Promise<Map<number, BookRating[]>> {
   const result = await db.execute({
@@ -176,7 +177,7 @@ export async function listBooks(listId: string, memberId: number | null): Promis
     .filter((row): row is BookRow => row !== null);
 }
 
-async function listMustReadTitles(db: DbClient, listId: string, memberId: number): Promise<string[]> {
+async function listMustReadTitles(db: DbExecutor, listId: string, memberId: number): Promise<string[]> {
   const result = await db.execute({
     sql: `SELECT b.title FROM ratings r
       INNER JOIN books b ON b.id = r.book_id
@@ -188,7 +189,7 @@ async function listMustReadTitles(db: DbClient, listId: string, memberId: number
 }
 
 async function upsertRatingInTx(
-  db: DbClient,
+  db: DbExecutor,
   bookId: number,
   memberId: number,
   score: BookScore,
@@ -223,32 +224,34 @@ async function upsertRatingWithCap(
 ): Promise<BooksResult<void>> {
   return withRatingCapLock(async () => {
     const db = await getDb();
-    await db.execute("BEGIN IMMEDIATE");
+    const tx = await db.transaction("write");
     try {
-      const current = await db.execute({
+      const current = await tx.execute({
         sql: "SELECT score FROM ratings WHERE book_id = ? AND member_id = ?",
         args: [bookId, memberId],
       });
       const currentScore = current.rows[0] ? parseRatingScore(current.rows[0].score) : null;
 
       if (score === 3 && currentScore !== 3) {
-        const titles = await listMustReadTitles(db, listId, memberId);
+        const titles = await listMustReadTitles(tx, listId, memberId);
         if (titles.length >= MUST_READ_MAX) {
-          await db.execute("ROLLBACK");
+          await tx.rollback();
           return { ok: false, error: copy.mustReadCapExceeded(titles) };
         }
       }
 
-      await upsertRatingInTx(db, bookId, memberId, score);
-      await db.execute("COMMIT");
+      await upsertRatingInTx(tx, bookId, memberId, score);
+      await tx.commit();
       return { ok: true, value: undefined };
     } catch (error) {
       try {
-        await db.execute("ROLLBACK");
+        await tx.rollback();
       } catch {
         /* ignore rollback failure */
       }
       throw error;
+    } finally {
+      tx.close();
     }
   });
 }

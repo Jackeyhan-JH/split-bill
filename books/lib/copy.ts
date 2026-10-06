@@ -36,6 +36,7 @@ export const copy = {
   bookTitleRequired: "请填写书名",
   memberRequired: "请先选择「我是谁」",
   invalidScore: "请选择 1、2 或 3 分",
+  requestFailed: "请求失败，请稍后重试",
   scoreMustRead: "必读",
   scoreRecommend: "推荐阅读",
   scoreBoring: "无聊再读",

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { copy } from "../../../lib/copy";
+import { errorMessageFromBody, readResponseJson } from "../../../lib/http-json";
 import { copyTextToClipboard } from "../../../lib/clipboard";
 import {
   readStoredMemberId,
@@ -146,13 +147,13 @@ export function BookListView({ listId, listName, initialMembers }: Props) {
           ...(addScore !== null ? { score: addScore } : {}),
         }),
       });
-      const data: unknown = await response.json();
+      const { data, parseError } = await readResponseJson(response);
       if (!response.ok) {
-        const message =
-          data && typeof data === "object" && "error" in data && typeof data.error === "string"
-            ? data.error
-            : copy.bookTitleRequired;
-        setFieldError(message);
+        setFieldError(errorMessageFromBody(data, parseError, copy.bookTitleRequired));
+        return;
+      }
+      if (parseError) {
+        setFieldError(copy.requestFailed);
         return;
       }
       const book =
@@ -189,14 +190,15 @@ export function BookListView({ listId, listName, initialMembers }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ memberId: identityId, score }),
       });
-      const data: unknown = await response.json();
+      const { data, parseError } = await readResponseJson(response);
       if (!response.ok) {
         setBooks(previousBooks);
-        const message =
-          data && typeof data === "object" && "error" in data && typeof data.error === "string"
-            ? data.error
-            : copy.invalidScore;
-        setFieldError(message);
+        setFieldError(errorMessageFromBody(data, parseError, copy.requestFailed));
+        return;
+      }
+      if (parseError) {
+        setBooks(previousBooks);
+        setFieldError(copy.requestFailed);
         return;
       }
       const book =
@@ -212,7 +214,7 @@ export function BookListView({ listId, listName, initialMembers }: Props) {
       showToast(copy.saved);
     } catch {
       setBooks(previousBooks);
-      setFieldError(copy.invalidScore);
+      setFieldError(copy.requestFailed);
     } finally {
       submitting.current = false;
     }
@@ -260,14 +262,15 @@ export function BookListView({ listId, listName, initialMembers }: Props) {
         `/api/book-lists/${listId}/books/${activeBookId}/ratings?memberId=${identityId}`,
         { method: "DELETE" },
       );
-      const data: unknown = await response.json();
+      const { data, parseError } = await readResponseJson(response);
       if (!response.ok) {
         setBooks(previousBooks);
-        const message =
-          data && typeof data === "object" && "error" in data && typeof data.error === "string"
-            ? data.error
-            : copy.invalidScore;
-        setFieldError(message);
+        setFieldError(errorMessageFromBody(data, parseError, copy.requestFailed));
+        return;
+      }
+      if (parseError) {
+        setBooks(previousBooks);
+        setFieldError(copy.requestFailed);
         return;
       }
       const book =
@@ -283,7 +286,7 @@ export function BookListView({ listId, listName, initialMembers }: Props) {
       showToast(copy.saved);
     } catch {
       setBooks(previousBooks);
-      setFieldError(copy.invalidScore);
+      setFieldError(copy.requestFailed);
     } finally {
       submitting.current = false;
     }
