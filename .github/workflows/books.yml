@@ -26,9 +26,28 @@ jobs:
           cache: npm
           cache-dependency-path: books/package-lock.json
       - run: npm ci
+      - name: Install sqld (libsql-server)
+        run: |
+          curl -sSfL -o /tmp/libsql-server.tar.xz \
+            "https://github.com/tursodatabase/libsql/releases/download/libsql-server-v0.24.32/libsql-server-x86_64-unknown-linux-gnu.tar.xz"
+          tar -xf /tmp/libsql-server.tar.xz -C /tmp
+          echo "/tmp/libsql-server-x86_64-unknown-linux-gnu" >> "$GITHUB_PATH"
+      - name: Start sqld for HTTP libsql tests
+        run: |
+          sqld --db-path /tmp/books-ci.sqld --http-listen-addr 127.0.0.1:18080 &
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:18080/ >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "sqld did not become ready" >&2
+          exit 1
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
+        env:
+          BOOKS_LIBSQL_HTTP_URL: http://127.0.0.1:18080
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
